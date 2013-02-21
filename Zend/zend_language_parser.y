@@ -515,7 +515,7 @@ new_else_single:
 
 
 parameter_list:
-		non_empty_parameter_list
+		non_empty_parameter_list possible_comma
 	|	/* empty */
 ;
 
@@ -542,7 +542,7 @@ optional_class_type:
 
 function_call_parameter_list:
 		'(' ')'	{ Z_LVAL($$.u.constant) = 0; }
-	|	'(' non_empty_function_call_parameter_list ')'	{ $$ = $2; }
+	|	'(' non_empty_function_call_parameter_list possible_comma ')'	{ $$ = $2; }
 	|	'(' yield_expr ')'	{ Z_LVAL($$.u.constant) = 1; zend_do_pass_param(&$2, ZEND_SEND_VAL, Z_LVAL($$.u.constant) TSRMLS_CC); }
 ;
 
