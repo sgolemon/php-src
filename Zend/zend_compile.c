@@ -1834,7 +1834,7 @@ void zend_do_end_function_declaration(const znode *function_token TSRMLS_DC) /* 
 }
 /* }}} */
 
-void zend_do_receive_arg(zend_uchar op, znode *varname, const znode *offset, const znode *initialization, znode *class_type, zend_uchar pass_by_reference TSRMLS_DC) /* {{{ */
+void zend_do_receive_arg(zend_uchar op, znode *varname, const znode *offset, const znode *initialization, znode *class_type, znode *member_modifier, zend_uchar pass_by_reference TSRMLS_DC) /* {{{ */
 {
 	zend_op *opline;
 	zend_arg_info *cur_arg_info;
@@ -1927,6 +1927,53 @@ void zend_do_receive_arg(zend_uchar op, znode *varname, const znode *offset, con
 				}
 			}
 		}
+	}
+
+	if (member_modifier->op_type != IS_UNUSED) {
+		/* Constructor parameter promotion */
+		znode _this;
+		znode propname, propvar;
+		znode assign_result;
+		long modifier = Z_LVAL(member_modifier->u.constant);
+
+		if (!CG(active_op_array)->scope) {
+			zend_error(E_COMPILE_ERROR, "Parameter modifiers not allowed on functions");
+		}
+
+		if (strcmp(CG(active_op_array)->function_name, ZEND_CONSTRUCTOR_FUNC_NAME) &&
+		    strcasecmp(CG(active_op_array)->function_name, CG(active_op_array)->scope->name)) {
+			zend_error(E_COMPILE_ERROR, "Parameter modifiers not allowed on methods");
+		}
+
+		if (CG(active_op_array)->scope->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_TRAIT)) {
+			zend_error(E_COMPILE_ERROR, "Constructor parameter promotion not allowed on traits or interfaces");
+		}
+
+		if (CG(active_op_array)->fn_flags & ZEND_ACC_ABSTRACT) {
+			zend_error(E_COMPILE_ERROR, "Parameter modifiers not allowed on abstract constructor");
+		}
+
+		if (modifier & ~(ZEND_ACC_PUBLIC|ZEND_ACC_PROTECTED|ZEND_ACC_PRIVATE)) {
+			zend_error(E_COMPILE_ERROR, "Invalid parameter modifiers on constructor");
+		}
+
+		_this.op_type = IS_CV;
+		_this.u.op.var = CG(active_op_array)->this_var;
+		_this.EA = 0;
+
+		propname.op_type = IS_CONST;
+		ZVAL_STRINGL(&propname.u.constant, Z_STRVAL(varname->u.constant), Z_STRLEN(varname->u.constant), 1);
+		zend_do_declare_property(&propname, NULL, modifier TSRMLS_CC);
+
+		/* Declaration/Assignment needs their own individual copies because of built-in assumptions */
+		propname.op_type = IS_CONST;
+		ZVAL_STRINGL(&propname.u.constant, Z_STRVAL(varname->u.constant), Z_STRLEN(varname->u.constant), 1);
+
+		/* $this->varname = $varname; */
+		zend_do_begin_variable_parse(TSRMLS_C);
+		zend_do_fetch_property(&propvar, &_this, &propname TSRMLS_CC);
+		zend_do_assign(&assign_result, &propvar, &var TSRMLS_CC);
+		zend_do_free(&assign_result TSRMLS_CC);
 	}
 }
 /* }}} */
