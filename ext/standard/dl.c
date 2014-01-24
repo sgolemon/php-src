@@ -97,14 +97,61 @@ PHPAPI PHP_FUNCTION(dl)
 #define USING_ZTS 0
 #endif
 
+PHPAPI zend_module_entry *php_dl_get_module(const char *libpath, DL_HANDLE *phandle,
+                                            int error_type, const char *filename TSRMLS_DC) {
+	zend_module_entry *(*get_module)(void);
+
+	/* load dynamic symbol */
+	DL_HANDLE handle = DL_LOAD(libpath);
+	if (!handle) {
+#if PHP_WIN32
+		char *err = GET_DL_ERROR();
+		if (err && (*err != "")) {
+			php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, err);
+			LocalFree(err);
+		} else {
+			php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, "Unknown reason");
+		}
+#else
+		php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, GET_DL_ERROR());
+		GET_DL_ERROR(); /* free the buffer storing the error */
+#endif
+		return NULL;
+	}
+
+	get_module = (zend_module_entry *(*)(void)) DL_FETCH_SYMBOL(handle, "get_module");
+
+	/* Some OS prepend _ to symbol names while their dynamic linker
+	 * does not do that automatically. Thus we check manually for
+	 * _get_module. */
+
+	if (!get_module) {
+		get_module = (zend_module_entry *(*)(void)) DL_FETCH_SYMBOL(handle, "_get_module");
+	}
+
+	if (!get_module) {
+		if (DL_FETCH_SYMBOL(handle, "zend_extension_entry") || DL_FETCH_SYMBOL(handle, "_zend_extension_entry")) {
+			DL_UNLOAD(handle);
+			php_error_docref(NULL TSRMLS_CC, error_type, "Invalid library (appears to be a Zend Extension, try loading using zend_extension=%s from php.ini)", filename);
+			return NULL;
+		}
+		DL_UNLOAD(handle);
+		php_error_docref(NULL TSRMLS_CC, error_type, "Invalid library (maybe not a PHP library) '%s'", filename);
+		return NULL;
+	}
+	if (phandle) {
+		*phandle = handle;
+	}
+	return get_module();
+}
+
 /* {{{ php_load_extension
  */
 PHPAPI int php_load_extension(char *filename, int type, int start_now TSRMLS_DC)
 {
-	void *handle;
+	DL_HANDLE handle;
 	char *libpath;
 	zend_module_entry *module_entry;
-	zend_module_entry *(*get_module)(void);
 	int error_type;
 	char *extension_dir;
 
@@ -140,47 +187,11 @@ PHPAPI int php_load_extension(char *filename, int type, int start_now TSRMLS_DC)
 		return FAILURE; /* Not full path given or extension_dir is not set */
 	}
 
-	/* load dynamic symbol */
-	handle = DL_LOAD(libpath);
-	if (!handle) {
-#if PHP_WIN32
-		char *err = GET_DL_ERROR();
-		if (err && (*err != "")) {
-			php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, err);
-			LocalFree(err);
-		} else {
-			php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, "Unknown reason");
-		}
-#else
-		php_error_docref(NULL TSRMLS_CC, error_type, "Unable to load dynamic library '%s' - %s", libpath, GET_DL_ERROR());
-		GET_DL_ERROR(); /* free the buffer storing the error */
-#endif
-		efree(libpath);
-		return FAILURE;
-	}
+	module_entry = php_dl_get_module(libpath, &handle, error_type, filename TSRMLS_CC);
 	efree(libpath);
-
-	get_module = (zend_module_entry *(*)(void)) DL_FETCH_SYMBOL(handle, "get_module");
-
-	/* Some OS prepend _ to symbol names while their dynamic linker
-	 * does not do that automatically. Thus we check manually for
-	 * _get_module. */
-
-	if (!get_module) {
-		get_module = (zend_module_entry *(*)(void)) DL_FETCH_SYMBOL(handle, "_get_module");
-	}
-
-	if (!get_module) {
-		if (DL_FETCH_SYMBOL(handle, "zend_extension_entry") || DL_FETCH_SYMBOL(handle, "_zend_extension_entry")) {
-			DL_UNLOAD(handle);
-			php_error_docref(NULL TSRMLS_CC, error_type, "Invalid library (appears to be a Zend Extension, try loading using zend_extension=%s from php.ini)", filename);
-			return FAILURE;
-		}
-		DL_UNLOAD(handle);
-		php_error_docref(NULL TSRMLS_CC, error_type, "Invalid library (maybe not a PHP library) '%s'", filename);
+	if (!module_entry) {
 		return FAILURE;
 	}
-	module_entry = get_module();
 	if (module_entry->zend_api != ZEND_MODULE_API_NO) {
 		/* Check for pre-4.1.0 module which has a slightly different module_entry structure :( */
 			struct pre_4_1_0_module_entry {

@@ -23,6 +23,8 @@
 #ifndef DL_H
 #define DL_H
 
+PHPAPI zend_module_entry *php_dl_get_module(const char *libpath, DL_HANDLE *phandle,
+                                            int error_type, const char *filename TSRMLS_DC);
 PHPAPI int php_load_extension(char *filename, int type, int start_now TSRMLS_DC);
 PHPAPI void php_dl(char *file, int type, zval *return_value, int start_now TSRMLS_DC);
 

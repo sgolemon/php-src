@@ -1200,28 +1200,14 @@ static int do_cli(int argc, char **argv TSRMLS_DC) /* {{{ */
 				}
 			case PHP_MODE_MODINFO:
 				{
-					DL_HANDLE handle = DL_LOAD(extapi_module);
-					if (!handle) {
-						const char *err = DL_ERROR();
-						if (!err) {
-							err = "unknown error";
-						}
-						zend_printf("Unable to load dynamic library '%s' - %s\n",
-						            extapi_module, err);
-						exit_status=1;
+					DL_HANDLE handle;
+					zend_module_entry *module =
+					    php_dl_get_module(extapi_module, &handle,
+					    E_WARNING, extapi_module TSRMLS_CC);
+					if (!module) {
+						exit_status = 1;
 						goto err;
 					}
-					zend_module_entry *(*get_module)(void) = (zend_module_entry *(*)(void))DL_FETCH_SYMBOL(handle, "get_module");
-					if (!get_module) {
-						get_module = (zend_module_entry *(*)(void))DL_FETCH_SYMBOL(handle, "_get_module");
-						if (!get_module) {
-							zend_printf("Invalid library (maybe not a PHP library) '%s'\n", extapi_module);
-							exit_status=1;
-							DL_UNLOAD(handle);
-							goto err;
-						}
-					}
-					zend_module_entry *module = get_module();
 					zend_printf("ZEND_MODULE_API_NO: %d\n", module->zend_api);
 					if (module->zend_api >= 20041030) {
 						zend_printf("ZEND_DEBUG:         %s\n", module->zend_debug ? "enabled" : "disabled");
