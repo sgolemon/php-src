@@ -116,6 +116,8 @@ PHPAPI extern char *php_ini_scanned_files;
 #define PHP_MODE_REFLECTION_EXT_INFO    11
 #define PHP_MODE_REFLECTION_ZEND_EXTENSION 12
 #define PHP_MODE_SHOW_INI_CONFIG        13
+#define PHP_MODE_APINO                  14
+#define PHP_MODE_MODINFO                15
 
 cli_shell_callbacks_t cli_shell_callbacks = { NULL, NULL, NULL };
 PHP_CLI_API cli_shell_callbacks_t *php_cli_get_shell_callbacks()
@@ -170,6 +172,8 @@ const opt_struct OPTIONS[] = {
 	{14,  1, "ri"},
 	{14,  1, "rextinfo"},
 	{15,  0, "ini"},
+	{16,  0, "apino"},
+	{17,  1, "modinfo"},
 	{'-', 0, NULL} /* end of args */
 };
 
@@ -662,6 +666,7 @@ static int do_cli(int argc, char **argv TSRMLS_DC) /* {{{ */
 	zend_file_handle file_handle;
 	int behavior = PHP_MODE_STANDARD;
 	char *reflection_what = NULL;
+	char *extapi_module = NULL;
 	volatile int request_started = 0;
 	volatile int exit_status = 0;
 	char *php_optarg = NULL, *orig_optarg = NULL;
@@ -897,6 +902,13 @@ static int do_cli(int argc, char **argv TSRMLS_DC) /* {{{ */
 				break;
 			case 15:
 				behavior = PHP_MODE_SHOW_INI_CONFIG;
+				break;
+			case 16:
+				behavior = PHP_MODE_APINO;
+				break;
+			case 17:
+				behavior = PHP_MODE_MODINFO;
+				extapi_module = php_optarg;
 				break;
 			default:
 				break;
@@ -1167,6 +1179,52 @@ static int do_cli(int argc, char **argv TSRMLS_DC) /* {{{ */
 					zend_printf("Loaded Configuration File:         %s\n", php_ini_opened_path ? php_ini_opened_path : "(none)");
 					zend_printf("Scan for additional .ini files in: %s\n", php_ini_scanned_path  ? php_ini_scanned_path : "(none)");
 					zend_printf("Additional .ini files parsed:      %s\n", php_ini_scanned_files ? php_ini_scanned_files : "(none)");
+					break;
+				}
+			case PHP_MODE_APINO:
+				{
+					zend_bool dbg = 0, zts = 0;
+#ifdef ZEND_DEBUG
+					dbg = 1;
+#endif
+#ifdef ZTS
+					zts = 1;
+#endif
+					zend_printf("ZEND_MODULE_API_NO: %d\n", ZEND_MODULE_API_NO);
+					zend_printf("ZEND_DEBUG:         %s\n", dbg ? "enabled" : "disabled"); 
+					zend_printf("ZTS:                %s\n", zts ? "enabled" : "disabled");
+					break;
+				}
+			case PHP_MODE_MODINFO:
+				{
+					DL_HANDLE handle = DL_LOAD(extapi_module);
+					if (!handle) {
+						const char *err = DL_ERROR();
+						if (!err) {
+							err = "unknown error";
+						}
+						zend_printf("Unable to load dynamic library '%s' - %s\n",
+						            extapi_module, err);
+						exit_status=1;
+						goto err;
+					}
+					zend_module_entry *(*get_module)(void) = (zend_module_entry *(*)(void))DL_FETCH_SYMBOL(handle, "get_module");
+					if (!get_module) {
+						get_module = (zend_module_entry *(*)(void))DL_FETCH_SYMBOL(handle, "_get_module");
+						if (!get_module) {
+							zend_printf("Invalid library (maybe not a PHP library) '%s'\n", extapi_module);
+							exit_status=1;
+							DL_UNLOAD(handle);
+							goto err;
+						}
+					}
+					zend_module_entry *module = get_module();
+					zend_printf("ZEND_MODULE_API_NO: %d\n", module->zend_api);
+					if (module->zend_api >= 20041030) {
+						zend_printf("ZEND_DEBUG:         %s\n", module->zend_debug ? "enabled" : "disabled");
+						zend_printf("ZTS:                %s\n", module->zts ? "enabled" : "disabled");
+					}
+					DL_UNLOAD(handle);
 					break;
 				}
 		}
