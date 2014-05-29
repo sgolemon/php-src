@@ -2434,6 +2434,48 @@ ZEND_METHOD(reflection_parameter, getClass)
 }
 /* }}} */
 
+/* {{{ proto public bool ReflectionParameter::hasTypehint()
+   Rethern whether parameter has a type hint */
+ZEND_METHOD(reflection_parameter, hasTypehint)
+{
+	reflection_object *intern;
+	parameter_reference *param;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+	GET_REFLECTION_OBJECT_PTR(param);
+
+	RETVAL_BOOL(param->arg_info->type_hint != 0);
+}
+/* }}} */
+
+/* {{{ proto public string ReflectionParameter::getTypehintText()
+   Returns the typehint associated with the parameter */
+ZEND_METHOD(reflection_parameter, getTypehintText)
+{
+	reflection_object *intern;
+	parameter_reference *param;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+	GET_REFLECTION_OBJECT_PTR(param);
+
+	switch (param->arg_info->type_hint) {
+		case IS_ARRAY:
+			RETURN_STRINGL("array", sizeof("array") - 1, 1);
+		case IS_CALLABLE:
+			RETURN_STRINGL("callable", sizeof("callable") - 1, 1);
+		case IS_OBJECT:
+			RETURN_STRINGL(param->arg_info->class_name,
+			               param->arg_info->class_name_len, 1);
+		default:
+			RETURN_EMPTY_STRING();
+	}
+}
+/* }}} */
+
 /* {{{ proto public bool ReflectionParameter::isArray()
    Returns whether parameter MUST be an array */
 ZEND_METHOD(reflection_parameter, isArray)
@@ -6026,6 +6068,8 @@ static const zend_function_entry reflection_parameter_functions[] = {
 	ZEND_ME(reflection_parameter, getDeclaringFunction, arginfo_reflection__void, 0)
 	ZEND_ME(reflection_parameter, getDeclaringClass, arginfo_reflection__void, 0)
 	ZEND_ME(reflection_parameter, getClass, arginfo_reflection__void, 0)
+	ZEND_ME(reflection_parameter, hasTypehint, arginfo_reflection__void, 0)
+	ZEND_ME(reflection_parameter, getTypehintText, arginfo_reflection__void, 0)
 	ZEND_ME(reflection_parameter, isArray, arginfo_reflection__void, 0)
 	ZEND_ME(reflection_parameter, isCallable, arginfo_reflection__void, 0)
 	ZEND_ME(reflection_parameter, allowsNull, arginfo_reflection__void, 0)
