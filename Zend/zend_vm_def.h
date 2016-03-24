@@ -6928,12 +6928,17 @@ ZEND_VM_HANDLER(152, ZEND_JMP_SET, CONST|TMP|VAR|CV, JMP_ADDR)
 	SAVE_OPLINE();
 	value = GET_OP1_ZVAL_PTR(BP_VAR_R);
 
-	if ((OP1_TYPE == IS_VAR || OP1_TYPE == IS_CV) && Z_ISREF_P(value)) {
-		if (OP1_TYPE == IS_VAR) {
-			ref = value;
+	if (OP1_TYPE == IS_VAR || OP1_TYPE == IS_CV) {
+		if (Z_ISREF_P(value)) {
+			if (OP1_TYPE == IS_VAR) {
+				ref = value;
+			}
+			value = Z_REFVAL_P(value);
+		} else if (UNEXPECTED(Z_TYPE_P(value) == IS_INDIRECT)) {
+			value = Z_INDIRECT_P(value);
 		}
-		value = Z_REFVAL_P(value);
 	}
+
 	if (i_zend_is_true(value)) {
 		ZVAL_COPY_VALUE(EX_VAR(opline->result.var), value);
 		if (OP1_TYPE == IS_CONST) {

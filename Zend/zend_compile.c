@@ -6549,6 +6549,30 @@ void zend_compile_cast(znode *result, zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_shorthand_conditional_assign(znode *result, zend_ast *ast) /* {{{ */
+{
+        zend_ast *var_ast = ast->child[0];
+        zend_ast *false_ast = ast->child[1];
+
+	znode var_node, false_node;
+	zend_op *opline;
+	uint32_t opnum_jmp_set;
+
+        zend_ensure_writable_variable(var_ast);
+        zend_compile_var(&var_node, var_ast, BP_VAR_RW);
+	ZEND_ASSERT(var_node.op_type != IS_TMP_VAR);
+
+	opnum_jmp_set = get_next_op_number(CG(active_op_array));
+	zend_emit_op_tmp(result, ZEND_JMP_SET, &var_node, NULL);
+
+        zend_compile_expr(&false_node, false_ast);
+	opline = zend_emit_op_tmp(NULL, ZEND_ASSIGN, &var_node, &false_node);
+	SET_NODE(opline->result, result);
+
+	zend_update_jump_target_to_next(opnum_jmp_set);
+}
+/* }}} */
+
 static void zend_compile_shorthand_conditional(znode *result, zend_ast *ast) /* {{{ */
 {
 	zend_ast *cond_ast = ast->child[0];
@@ -7542,6 +7566,9 @@ void zend_compile_expr(znode *result, zend_ast *ast) /* {{{ */
 		case ZEND_AST_ASSIGN_OP:
 			zend_compile_compound_assign(result, ast);
 			return;
+		case ZEND_AST_ASSIGN_CONDITIONAL:
+			zend_compile_shorthand_conditional_assign(result, ast);
+			break;
 		case ZEND_AST_BINARY_OP:
 			zend_compile_binary_op(result, ast);
 			return;
