@@ -8,6 +8,18 @@ var_dump($x);
 $x[1][2][5][6] ?:= 'goodbye';
 var_dump($x);
 
+unset($x);
+
+$y = 1;
+$x = array(&$y);
+$x[0] ?:= 2;
+var_dump($y);
+
+$y = 0;
+$x[0] ?:= 3;
+var_dump($y);
+
+
 --EXPECTF--
 Notice: Undefined variable: x in %s/conditional_assign_006.php on line 3
 
@@ -53,3 +65,5 @@ array(1) {
     }
   }
 }
+int(1)
+int(3)
