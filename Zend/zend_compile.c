@@ -6562,10 +6562,19 @@ void zend_compile_shorthand_conditional_assign(znode *result, zend_ast *ast) /* 
         zend_compile_var(&var_node, var_ast, BP_VAR_RW);
 	ZEND_ASSERT(var_node.op_type != IS_TMP_VAR);
 
+	/* If the current value of the lhs var expression is defined,
+	 * just skip past processing the false side of the equation
+	 */
 	opnum_jmp_set = get_next_op_number(CG(active_op_array));
 	zend_emit_op_tmp(result, ZEND_JMP_SET, &var_node, NULL);
 
+	/* Otherwise, get the false-case expression
+	 * And re-fetch the variable for writing to assign to it.
+	 * Due to the RW fetch above, there will not be any undefined
+	 * notices on this pass.
+	 */
         zend_compile_expr(&false_node, false_ast);
+	zend_compile_var(&var_node, var_ast, BP_VAR_W);
 	opline = zend_emit_op_tmp(NULL, ZEND_ASSIGN, &var_node, &false_node);
 	SET_NODE(opline->result, result);
 
