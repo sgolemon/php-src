@@ -86,6 +86,7 @@
 
 #include "idn/idn.h"
 #include "uchar/uchar.h"
+#include "ucsdet/ucsdet.h"
 
 #if U_ICU_VERSION_MAJOR_NUM * 1000 + U_ICU_VERSION_MINOR_NUM >= 4002
 # include "spoofchecker/spoofchecker_class.h"
@@ -629,6 +630,29 @@ ZEND_BEGIN_ARG_INFO_EX( ainfo_gregcal_set_gregorian_change, 0, 0, 2 )
 	ZEND_ARG_INFO( 0, date )
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX( ainfo_ucsdet_create, 0, ZEND_RETURN_VALUE, 0 )
+	ZEND_ARG_INFO( 0, text )
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX( ainfo_ucsdet_set_text, 0, ZEND_RETURN_VALUE, 2 )
+	ZEND_ARG_OBJ_INFO( 0, charsetDetector, IntlCharsetDetector, 0)
+	ZEND_ARG_INFO( 0, text )
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX( ainfo_ucsdet_set_declared_encoding, 0, ZEND_RETURN_VALUE, 2)
+	ZEND_ARG_OBJ_INFO( 0, charsetDetector, IntlCharsetDetector, 0)
+	ZEND_ARG_INFO( 0, encoding )
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX( ainfo_ucsdet_1arg, 0, ZEND_RETURN_VALUE, 1)
+	ZEND_ARG_OBJ_INFO( 0, charsetDetector, IntlCharsetDetector, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX( ainfo_ucsdet_enable_input_filter, 0, ZEND_RETURN_VALUE, 2)
+	ZEND_ARG_OBJ_INFO( 0, charsetDetector, IntlCharsetDetector, 0)
+	ZEND_ARG_INFO( 0, enable )
+ZEND_END_ARG_INFO()
+
 /* }}} */
 
 /* {{{ intl_functions
@@ -851,6 +875,16 @@ zend_function_entry intl_functions[] = {
 	PHP_FE( intlgregcal_get_gregorian_change, ainfo_gregcal_only_gregcal )
 	PHP_FE( intlgregcal_is_leap_year, ainfo_gregcal_is_leap_year )
 
+	/* UCharsetDetector */
+	PHP_FE(ucsdet_create, ainfo_ucsdet_create)
+	PHP_FE(ucsdet_set_text, ainfo_ucsdet_set_text)
+	PHP_FE(ucsdet_set_declared_encoding, ainfo_ucsdet_set_declared_encoding)
+	PHP_FE(ucsdet_detect, ainfo_ucsdet_1arg)
+	PHP_FE(ucsdet_detect_all, ainfo_ucsdet_1arg)
+	PHP_FE(ucsdet_get_all_detectable_charsets, ainfo_ucsdet_1arg)
+	PHP_FE(ucsdet_is_input_filter_enabled, ainfo_ucsdet_1arg)
+	PHP_FE(ucsdet_enable_input_filter, ainfo_ucsdet_enable_input_filter)
+
 	/* common functions */
 	PHP_FE( intl_get_error_code, intl_0_args )
 	PHP_FE( intl_get_error_message, intl_0_args )
@@ -1003,6 +1037,9 @@ PHP_MINIT_FUNCTION( intl )
 
 	/* IntlChar class */
 	php_uchar_minit(INIT_FUNC_ARGS_PASSTHRU);
+
+	/* IntlCharsetDetector class */
+	php_ucsdet_minit(INIT_FUNC_ARGS_PASSTHRU);
 
 	return SUCCESS;
 }

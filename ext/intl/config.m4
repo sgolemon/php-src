@@ -85,6 +85,7 @@ if test "$PHP_INTL" != "no"; then
     breakiterator/codepointiterator_internal.cpp \
     breakiterator/codepointiterator_methods.cpp \
     uchar/uchar.c \
+    ucsdet/ucsdet.c \
     idn/idn.c \
     $icu_spoof_src, $ext_shared,,$ICU_INCS -Wno-write-strings -D__STDC_LIMIT_MACROS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
   PHP_ADD_BUILD_DIR($ext_builddir/collator)
