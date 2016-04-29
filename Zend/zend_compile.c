@@ -6776,7 +6776,7 @@ void zend_compile_pipe(znode *result, zend_ast *ast) /* {{{ */
 
 	zend_compile_expr(result, expr_ast);
 	if (((znode*)zend_stack_top(&CG(pipe_op_stack)))->op_type == IS_TMP_VAR) {
-		// Unlikely, lhs emitted a TMP_VAR, and rhs never used it
+		/* Unlikely, lhs emitted a TMP_VAR, and rhs never used it */
 		zend_emit_op(NULL, ZEND_FREE, &data_node, NULL);
 	}
 	zend_stack_del_top(&CG(pipe_op_stack));
