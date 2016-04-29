@@ -312,6 +312,7 @@ void zend_init_compiler_data_structures(void) /* {{{ */
 {
 	zend_stack_init(&CG(loop_var_stack), sizeof(zend_loop_var));
 	zend_stack_init(&CG(delayed_oplines_stack), sizeof(zend_op));
+	zend_stack_init(&CG(pipe_op_stack), sizeof(znode));
 	CG(active_class_entry) = NULL;
 	CG(in_compilation) = 0;
 	CG(start_lineno) = 0;
@@ -345,6 +346,7 @@ void shutdown_compiler(void) /* {{{ */
 {
 	zend_stack_destroy(&CG(loop_var_stack));
 	zend_stack_destroy(&CG(delayed_oplines_stack));
+	zend_stack_destroy(&CG(pipe_op_stack));
 	zend_hash_destroy(&CG(filenames_table));
 	zend_hash_destroy(&CG(const_filenames));
 	zend_arena_destroy(CG(arena));
@@ -6743,6 +6745,44 @@ void zend_compile_coalesce(znode *result, zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_pipe_variable(znode *result, zend_ast *ast) /* {{{ */
+{
+	znode *node;
+
+	if (zend_stack_is_empty(&CG(pipe_op_stack))) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+			"Cannot use $$ outside of a pipe expression");
+	}
+
+	node = zend_stack_top(&CG(pipe_op_stack));
+	if (node->op_type == IS_UNUSED) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+			"Cannot use $$ twice in a single pipe expression");
+	}
+
+	*result = *node;
+	node->op_type = IS_UNUSED;
+}
+/* }}} */
+
+void zend_compile_pipe(znode *result, zend_ast *ast) /* {{{ */
+{
+	zend_ast *data_ast = ast->child[0];
+	zend_ast *expr_ast = ast->child[1];
+	znode data_node;
+
+	zend_compile_expr(&data_node, data_ast);
+	zend_stack_push(&CG(pipe_op_stack), &data_node);
+
+	zend_compile_expr(result, expr_ast);
+	if (((znode*)zend_stack_top(&CG(pipe_op_stack)))->op_type == IS_TMP_VAR) {
+		// Unlikely, lhs emitted a TMP_VAR, and rhs never used it
+		zend_emit_op(NULL, ZEND_FREE, &data_node, NULL);
+	}
+	zend_stack_del_top(&CG(pipe_op_stack));
+}
+/* }}} */
+
 void zend_compile_print(znode *result, zend_ast *ast) /* {{{ */
 {
 	zend_op *opline;
@@ -7688,6 +7728,12 @@ void zend_compile_expr(znode *result, zend_ast *ast) /* {{{ */
 		case ZEND_AST_COALESCE:
 			zend_compile_coalesce(result, ast);
 			return;
+		case ZEND_AST_PIPE:
+			zend_compile_pipe(result, ast);
+			break;
+		case ZEND_AST_PIPE_VARIABLE:
+			zend_compile_pipe_variable(result, ast);
+			break;
 		case ZEND_AST_PRINT:
 			zend_compile_print(result, ast);
 			return;

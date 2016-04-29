@@ -126,6 +126,7 @@ struct _zend_compiler_globals {
 	zend_arena *ast_arena;
 
 	zend_stack delayed_oplines_stack;
+	zend_stack pipe_op_stack;
 
 #ifdef ZTS
 	zval **static_members_table;
