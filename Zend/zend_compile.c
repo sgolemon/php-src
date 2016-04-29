@@ -724,11 +724,9 @@ static inline void zend_end_loop(int cont_addr, const znode *var_node) /* {{{ */
 }
 /* }}} */
 
-void zend_do_free(znode *op1) /* {{{ */
+static void zend_do_free_opline(znode *op1, zend_op *opline) /* {{{ */
 {
 	if (op1->op_type == IS_TMP_VAR) {
-		zend_op *opline = &CG(active_op_array)->opcodes[CG(active_op_array)->last-1];
-
 		while (opline->opcode == ZEND_END_SILENCE) {
 			opline--;
 		}
@@ -741,7 +739,6 @@ void zend_do_free(znode *op1) /* {{{ */
 
 		zend_emit_op(NULL, ZEND_FREE, op1, NULL);
 	} else if (op1->op_type == IS_VAR) {
-		zend_op *opline = &CG(active_op_array)->opcodes[CG(active_op_array)->last-1];
 		while (opline->opcode == ZEND_END_SILENCE ||
 				opline->opcode == ZEND_EXT_FCALL_END ||
 				opline->opcode == ZEND_OP_DATA) {
@@ -786,6 +783,11 @@ void zend_do_free(znode *op1) /* {{{ */
 	}
 }
 /* }}} */
+
+void zend_do_free(znode *op1) /* {{{ */
+{
+	zend_do_free_opline(op1, &CG(active_op_array)->opcodes[CG(active_op_array)->last-1]);
+} /* {{{ */
 
 uint32_t zend_add_class_modifier(uint32_t flags, uint32_t new_flag) /* {{{ */
 {
@@ -6770,14 +6772,16 @@ void zend_compile_pipe(znode *result, zend_ast *ast) /* {{{ */
 	zend_ast *data_ast = ast->child[0];
 	zend_ast *expr_ast = ast->child[1];
 	znode data_node;
+	zend_op *data_opline;
 
 	zend_compile_expr(&data_node, data_ast);
+	data_opline = &CG(active_op_array)->opcodes[CG(active_op_array)->last-1];
 	zend_stack_push(&CG(pipe_op_stack), &data_node);
 
 	zend_compile_expr(result, expr_ast);
-	if (((znode*)zend_stack_top(&CG(pipe_op_stack)))->op_type == IS_TMP_VAR) {
-		/* Unlikely, lhs emitted a TMP_VAR, and rhs never used it */
-		zend_emit_op(NULL, ZEND_FREE, &data_node, NULL);
+	if (((znode*)zend_stack_top(&CG(pipe_op_stack)))->op_type != IS_UNUSED) {
+		/* Unlikely, placeholder var not used */
+		zend_do_free_opline(&data_node, data_opline);
 	}
 	zend_stack_del_top(&CG(pipe_op_stack));
 }
