@@ -6772,16 +6772,16 @@ void zend_compile_pipe(znode *result, zend_ast *ast) /* {{{ */
 	zend_ast *data_ast = ast->child[0];
 	zend_ast *expr_ast = ast->child[1];
 	znode data_node;
-	zend_op *data_opline;
+	uint32_t data_opnum;
 
 	zend_compile_expr(&data_node, data_ast);
-	data_opline = &CG(active_op_array)->opcodes[CG(active_op_array)->last-1];
+	data_opnum = CG(active_op_array)->last - 1;
 	zend_stack_push(&CG(pipe_op_stack), &data_node);
 
 	zend_compile_expr(result, expr_ast);
 	if (((znode*)zend_stack_top(&CG(pipe_op_stack)))->op_type != IS_UNUSED) {
 		/* Unlikely, placeholder var not used */
-		zend_do_free_opline(&data_node, data_opline);
+		zend_do_free_opline(&data_node, &CG(active_op_array)->opcodes[data_opnum]);
 	}
 	zend_stack_del_top(&CG(pipe_op_stack));
 }
