@@ -1860,9 +1860,9 @@ inline_char_handler:
 	RETURN_TOKEN(T_VARIABLE);
 }
 
-<ST_IN_SCRIPTING,ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE,ST_VAR_OFFSET>"$$"[^${a-zA-Z_\x7f-\xff] {
+<ST_IN_SCRIPTING,ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE,ST_VAR_OFFSET>"$$"{WHITESPACE}*[^ \n\r\t${a-zA-Z_\x7f-\xff] {
 	/* Don't catch false positives from variable variables */
-	yyless(yyleng - 1);
+	yyless(2);
 	RETURN_TOKEN(T_PIPE_VARIABLE);
 }
 
