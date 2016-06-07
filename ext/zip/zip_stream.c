@@ -34,7 +34,6 @@ struct php_zip_stream_data_t {
 	struct zip *za;
 	struct zip_file *zf;
 	size_t cursor;
-	php_stream *stream;
 };
 
 #define STREAM_DATA_FROM_STREAM() \
@@ -79,11 +78,8 @@ static size_t php_zip_ops_read(php_stream *stream, char *buf, size_t count)
 /* {{{ php_zip_ops_write */
 static size_t php_zip_ops_write(php_stream *stream, const char *buf, size_t count)
 {
-	if (!stream) {
-		return 0;
-	}
-
-	return count;
+	php_error_docref(NULL, E_WARNING, "Writing to zip:// streams is not supported");
+	return 0;
 }
 /* }}} */
 
@@ -91,37 +87,32 @@ static size_t php_zip_ops_write(php_stream *stream, const char *buf, size_t coun
 static int php_zip_ops_close(php_stream *stream, int close_handle)
 {
 	STREAM_DATA_FROM_STREAM();
-	if (close_handle) {
-		if (self->zf) {
-			zip_fclose(self->zf);
-			self->zf = NULL;
-		}
-
-		if (self->za) {
-			zip_close(self->za);
-			self->za = NULL;
-		}
+	if (!close_handle) {
+		/* We're the only ones who know our internal data struct,
+		 * nobody should be trying to abscond with our handles
+		 */
+		php_error_docref(NULL, E_ERROR, "zip:// close called with PRESERVE_HANDLE");
+		return EOF;
 	}
+
+	if (self->zf) {
+		zip_fclose(self->zf);
+		self->zf = NULL;
+	}
+
+	if (self->za) {
+		zip_close(self->za);
+		self->za = NULL;
+	}
+
 	efree(self);
 	stream->abstract = NULL;
 	return EOF;
 }
 /* }}} */
 
-/* {{{ php_zip_ops_flush */
-static int php_zip_ops_flush(php_stream *stream)
-{
-	if (!stream) {
-		return 0;
-	}
-
-	return 0;
-}
-/* }}} */
-
 static int php_zip_ops_stat(php_stream *stream, php_stream_statbuf *ssb) /* {{{ */
 {
-	struct zip_stat sb;
 	const char *path = stream->orig_path;
 	int path_len = strlen(stream->orig_path);
 	char file_dirname[MAXPATHLEN];
@@ -129,50 +120,46 @@ static int php_zip_ops_stat(php_stream *stream, php_stream_statbuf *ssb) /* {{{ 
 	char *fragment;
 	int fragment_len;
 	int err;
-	zend_string *file_basename;
 
 	fragment = strchr(path, '#');
 	if (!fragment) {
 		return -1;
 	}
-
+	++fragment;
+	fragment_len = strlen(fragment);
+	if (fragment_len < 1) {
+		return -1;
+	}
 
 	if (strncasecmp("zip://", path, 6) == 0) {
 		path += 6;
 	}
-
-	fragment_len = strlen(fragment);
-
-	if (fragment_len < 1) {
-		return -1;
-	}
-	path_len = strlen(path);
+	path_len = fragment - path - 1;
 	if (path_len >= MAXPATHLEN) {
 		return -1;
 	}
 
-	memcpy(file_dirname, path, path_len - fragment_len);
-	file_dirname[path_len - fragment_len] = '\0';
-
-	file_basename = php_basename((char *)path, path_len - fragment_len, NULL, 0);
-	fragment++;
-
+	memcpy(file_dirname, path, path_len);
+	file_dirname[path_len] = '\0';
 	if (ZIP_OPENBASEDIR_CHECKPATH(file_dirname)) {
-		zend_string_release(file_basename);
 		return -1;
 	}
 
 	za = zip_open(file_dirname, ZIP_CREATE, &err);
 	if (za) {
+		struct zip_stat sb;
 		memset(ssb, 0, sizeof(php_stream_statbuf));
 		if (zip_stat(za, fragment, ZIP_FL_NOCASE, &sb) != 0) {
 			zip_close(za);
-			zend_string_release(file_basename);
 			return -1;
 		}
 		zip_close(za);
 
-		if (path[path_len-1] != '/') {
+		/* This is unreliable.  We're depending on how the stat was asked for
+		 * in /guessing/ whether or not the file is a directory.
+		 * Leaving this along for now, but we need a better way.
+		 */
+		if (fragment[fragment_len-1] != '/') {
 			ssb->sb.st_size = sb.size;
 			ssb->sb.st_mode |= S_IFREG; /* regular file */
 		} else {
@@ -191,14 +178,15 @@ static int php_zip_ops_stat(php_stream *stream, php_stream_statbuf *ssb) /* {{{ 
 #endif
 		ssb->sb.st_ino = -1;
 	}
-	zend_string_release(file_basename);
 	return 0;
 }
 /* }}} */
 
 php_stream_ops php_stream_zipio_ops = {
-	php_zip_ops_write, php_zip_ops_read,
-	php_zip_ops_close, php_zip_ops_flush,
+	php_zip_ops_write,
+	php_zip_ops_read,
+	php_zip_ops_close,
+	NULL, /* flush */
 	"zip",
 	NULL, /* seek */
 	NULL, /* cast */
@@ -237,7 +225,6 @@ php_stream *php_stream_zip_open(const char *filename, const char *path, const ch
 
 			self->za = stream_za;
 			self->zf = zf;
-			self->stream = NULL;
 			self->cursor = 0;
 			stream = php_stream_alloc(&php_stream_zipio_ops, self, NULL, mode);
 			stream->orig_path = estrdup(path);
@@ -246,12 +233,7 @@ php_stream *php_stream_zip_open(const char *filename, const char *path, const ch
 		}
 	}
 
-	if (!stream) {
-		return NULL;
-	} else {
-		return stream;
-	}
-
+	return stream;
 }
 /* }}} */
 
@@ -263,77 +245,57 @@ php_stream *php_stream_zip_opener(php_stream_wrapper *wrapper,
 											zend_string **opened_path,
 											php_stream_context *context STREAMS_DC)
 {
-	int path_len;
-
-	zend_string *file_basename;
 	char file_dirname[MAXPATHLEN];
-
-	struct zip *za;
-	struct zip_file *zf = NULL;
 	char *fragment;
-	int fragment_len;
-	int err;
-
+	int path_len, fragment_len, err;
+	struct zip *za;
 	php_stream *stream = NULL;
-	struct php_zip_stream_data_t *self;
 
 	fragment = strchr(path, '#');
 	if (!fragment) {
+		return NULL;
+	}
+	fragment++;
+	fragment_len = strlen(fragment);
+	if (!fragment_len) {
 		return NULL;
 	}
 
 	if (strncasecmp("zip://", path, 6) == 0) {
 		path += 6;
 	}
+	path_len = fragment - path - 1;;
 
-	fragment_len = strlen(fragment);
-
-	if (fragment_len < 1) {
-		return NULL;
-	}
-	path_len = strlen(path);
 	if (path_len >= MAXPATHLEN || mode[0] != 'r') {
 		return NULL;
 	}
 
-	memcpy(file_dirname, path, path_len - fragment_len);
-	file_dirname[path_len - fragment_len] = '\0';
-
-	file_basename = php_basename(path, path_len - fragment_len, NULL, 0);
-	fragment++;
-
+	memcpy(file_dirname, path, path_len);
+	file_dirname[path_len] = '\0';
 	if (ZIP_OPENBASEDIR_CHECKPATH(file_dirname)) {
-		zend_string_release(file_basename);
 		return NULL;
 	}
 
 	za = zip_open(file_dirname, ZIP_CREATE, &err);
 	if (za) {
-		zf = zip_fopen(za, fragment, 0);
+		struct zip_file *zf = zip_fopen(za, fragment, 0);
 		if (zf) {
-			self = emalloc(sizeof(*self));
+			struct php_zip_stream_data_t *self = emalloc(sizeof(*self));
 
 			self->za = za;
 			self->zf = zf;
-			self->stream = NULL;
 			self->cursor = 0;
 			stream = php_stream_alloc(&php_stream_zipio_ops, self, NULL, mode);
 
 			if (opened_path) {
-				*opened_path = zend_string_init(path, strlen(path), 0);
+				*opened_path = zend_string_init(path, path_len + 1 + fragment_len, 0);
 			}
 		} else {
 			zip_close(za);
 		}
 	}
 
-	zend_string_release(file_basename);
-
-	if (!stream) {
-		return NULL;
-	} else {
-		return stream;
-	}
+	return stream;
 }
 /* }}} */
 
