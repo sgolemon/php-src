@@ -1515,6 +1515,10 @@ PHP_MINIT_FUNCTION(openssl)
 
 	REGISTER_INI_ENTRIES();
 
+	if (FAILURE == php_openssl_bignum_minit(INIT_FUNC_ARGS_PASSTHRU)) {
+		return FAILURE;
+	}
+
 	return SUCCESS;
 }
 /* }}} */

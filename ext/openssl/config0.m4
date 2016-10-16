@@ -12,7 +12,7 @@ PHP_ARG_WITH(system-ciphers, whether to use system default cipher list instead o
 [  --with-system-ciphers   OPENSSL: Use system default cipher list instead of hardcoded value], no, no)
 
 if test "$PHP_OPENSSL" != "no"; then
-  PHP_NEW_EXTENSION(openssl, openssl.c xp_ssl.c, $ext_shared)
+  PHP_NEW_EXTENSION(openssl, openssl.c xp_ssl.c openssl_bignum.c, $ext_shared)
   PHP_SUBST(OPENSSL_SHARED_LIBADD)
 
   if test "$PHP_KERBEROS" != "no"; then

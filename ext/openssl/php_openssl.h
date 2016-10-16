@@ -126,6 +126,9 @@ PHP_FUNCTION(openssl_spki_export);
 PHP_FUNCTION(openssl_spki_export_challenge);
 
 PHP_FUNCTION(openssl_get_cert_locations);
+
+int php_openssl_bignum_minit(INIT_FUNC_ARGS);
+
 #else
 
 #define phpext_openssl_ptr NULL
