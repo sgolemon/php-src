@@ -46,6 +46,22 @@ php_openssl_bignum_from_zend_object(zend_object *zobj) {
 	);
 }
 
+static inline void php_openssl_bignum_type_error(int argnum, zend_uchar type) {
+	char *message;
+	const char *subtype = "";
+
+	if (type == IS_STRING) {
+		subtype = "non-numeric ";
+	}
+
+	spprintf(&message, 0, "OpenSSL\\BigNum::%s() expects parameter %d to be "
+	                      "an instance of OpenSSL\\BigNum or numeric integer, %s%s given",
+	                      get_active_function_name(), argnum,
+	                      subtype, zend_get_type_by_const(type));
+	zend_throw_exception(zend_ce_type_error, message, 0);
+	efree(message);
+}
+
 /* {{{ php_openssl_parse_arg */
 static BIGNUM* php_openssl_parse_arg(zval *arg, zval *dtor, int argnum) {
 	BIGNUM *bn = NULL;
@@ -57,13 +73,15 @@ static BIGNUM* php_openssl_parse_arg(zval *arg, zval *dtor, int argnum) {
 
 	{
 		zval tmp;
+		int parsed_len;
 		ZVAL_ZVAL(&tmp, arg, 1, 0);
 		convert_to_string(&tmp);
 		if ((Z_STRLEN(tmp) >= 2) && !strncmp(Z_STRVAL(tmp), "0x", 2)) {
-			if (!BN_hex2bn(&bn, Z_STRVAL(tmp) + 2)) { BN_clear_free(bn); bn = NULL; }
+			parsed_len = 2 + BN_hex2bn(&bn, Z_STRVAL(tmp) + 2);
 		} else {
-			if (!BN_dec2bn(&bn, Z_STRVAL(tmp)))     { BN_clear_free(bn); bn = NULL; }
+			parsed_len = BN_dec2bn(&bn, Z_STRVAL(tmp));
 		}
+		if (parsed_len != Z_STRLEN(tmp)) { BN_clear_free(bn); bn = NULL; }
 		zval_dtor(&tmp);
 	}
 
@@ -71,12 +89,7 @@ static BIGNUM* php_openssl_parse_arg(zval *arg, zval *dtor, int argnum) {
 		object_init_ex(dtor, php_openssl_bignum_ce);
 		php_openssl_bignum_from_zend_object(Z_OBJ_P(dtor))->num = bn;
 	} else {
-		char *message;
-		spprintf(&message, 0, "OpenSSL\\BigNum::%s() expects parameter %d to be "
-		                      "an instance of OpenSSL\\BigNum or numeric integer, %s given",
-		                      get_active_function_name(), argnum, zend_zval_type_name(arg));
-		zend_throw_exception(zend_ce_type_error, message, 0);
-		efree(message);
+		php_openssl_bignum_type_error(argnum, Z_TYPE_P(arg));
 	}
 
 	return bn;
@@ -92,6 +105,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(BigNum, __construct) {
 	php_openssl_bignum_object *objval = php_openssl_bignum_from_zend_object(Z_OBJ_P(getThis()));
 	zend_string *val = NULL;
+	int parsed_len;
 
 	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "|S", &val) == FAILURE) {
 		return;
@@ -103,9 +117,13 @@ static PHP_METHOD(BigNum, __construct) {
 	}
 
 	if ((ZSTR_LEN(val) >= 2) && !strncmp(ZSTR_VAL(val), "0x", 2)) {
-		BN_hex2bn(&(objval->num), ZSTR_VAL(val) + 2);
+		parsed_len = 2 + BN_hex2bn(&(objval->num), ZSTR_VAL(val) + 2);
 	} else {
-		BN_dec2bn(&(objval->num), ZSTR_VAL(val));
+		parsed_len = BN_dec2bn(&(objval->num), ZSTR_VAL(val));
+	}
+
+	if (parsed_len != ZSTR_LEN(val)) {
+		php_openssl_bignum_type_error(1, IS_STRING);
 	}
 }
 /* }}} */
