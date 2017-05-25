@@ -1,6 +1,6 @@
 PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? ????, PHP 7.2
+27 May 2017, PHP 7.2.0alpha0-201705250050
 
 - Core:
   . Added ZEND_IN_ARRAY instruction, implementing optimized in_array() builtin
