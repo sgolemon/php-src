@@ -510,6 +510,28 @@ PHP_FUNCTION(stream_copy_to_stream)
 }
 /* }}} */
 
+/* {{{ */
+PHP_FUNCTION(stream_get_fd)
+{
+	zval *zstream;
+	php_stream *stream;
+	php_socket_t fd;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_RESOURCE(zstream)
+	ZEND_PARSE_PARAMETERS_END();
+
+	php_stream_from_zval(stream, zstream);
+
+	if (FAILURE == php_stream_cast(stream, PHP_STREAM_AS_FD, (void**)&fd, 1)) {
+		/* stream will report error */
+		RETURN_FALSE;
+	}
+
+	RETURN_LONG(fd);
+}
+/* }}} */
+
 /* {{{ proto array stream_get_meta_data(resource fp)
     Retrieves header/meta data from streams/file pointers */
 PHP_FUNCTION(stream_get_meta_data)

@@ -1992,6 +1992,10 @@ ZEND_BEGIN_ARG_INFO(arginfo_stream_get_meta_data, 0)
 	ZEND_ARG_INFO(0, fp)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO(arginfo_stream_get_fd, 0)
+	ZEND_ARG_INFO(0, fp)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO(arginfo_stream_get_transports, 0)
 ZEND_END_ARG_INFO()
 
@@ -3171,6 +3175,7 @@ const zend_function_entry basic_functions[] = { /* {{{ */
 	PHP_FALIAS(socket_set_blocking, stream_set_blocking,					arginfo_stream_set_blocking)
 
 	PHP_FE(stream_get_meta_data,											arginfo_stream_get_meta_data)
+	PHP_FE(stream_get_fd,													arginfo_stream_get_fd)
 	PHP_FE(stream_get_line,													arginfo_stream_get_line)
 	PHP_FE(stream_wrapper_register,											arginfo_stream_wrapper_register)
 	PHP_FALIAS(stream_register_wrapper, stream_wrapper_register,			arginfo_stream_wrapper_register)
