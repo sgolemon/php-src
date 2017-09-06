@@ -1446,6 +1446,23 @@ static int zend_std_compare_objects(zval *o1, zval *o2) /* {{{ */
 	zobj1 = Z_OBJ_P(o1);
 	zobj2 = Z_OBJ_P(o2);
 
+	if (zobj1->ce->__cmp || zobj2->ce->__cmp) {
+		zval *lhs = zobj1->ce->__cmp ? o1 : o2;
+		zval *rhs = zobj1->ce->__cmp ? o2 : o1;
+		zend_class_entry *lhsce = Z_OBJCE_P(lhs);
+		zval retval;
+		if (!zend_call_method_with_1_params(lhs, lhsce, &lhsce->__cmp, ZEND_CMP_FUNC_NAME, &retval, rhs)) {
+			/* Call failure, call them different */
+			return 1;
+		}
+		if ((Z_TYPE(retval) != IS_LONG) || (Z_LVAL(retval) < -1) || (Z_LVAL(retval) > 1)) {
+			zval_dtor(&retval);
+			zend_throw_error(zend_ce_type_error, "%s::__cmp() must return -1, 0, or 1", ZSTR_VAL(Z_OBJCE_P(lhs)->name));
+			return 1;
+		}
+		return (lhs == o2) ? -Z_LVAL(retval) : Z_LVAL(retval);
+	}
+
 	if (zobj1->ce != zobj2->ce) {
 		return 1; /* different classes */
 	}

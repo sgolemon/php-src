@@ -1001,6 +1001,7 @@ END_EXTERN_C()
 #define ZEND_AUTOLOAD_FUNC_NAME     "__autoload"
 #define ZEND_INVOKE_FUNC_NAME       "__invoke"
 #define ZEND_DEBUGINFO_FUNC_NAME    "__debuginfo"
+#define ZEND_CMP_FUNC_NAME          "__cmp"
 
 /* The following constants may be combined in CG(compiler_options)
  * to change the default compiler behavior */

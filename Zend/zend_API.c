@@ -2153,7 +2153,7 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 	int count=0, unload=0;
 	HashTable *target_function_table = function_table;
 	int error_type;
-	zend_function *ctor = NULL, *dtor = NULL, *clone = NULL, *__get = NULL, *__set = NULL, *__unset = NULL, *__isset = NULL, *__call = NULL, *__callstatic = NULL, *__tostring = NULL, *__debugInfo = NULL;
+	zend_function *ctor = NULL, *dtor = NULL, *clone = NULL, *__get = NULL, *__set = NULL, *__unset = NULL, *__isset = NULL, *__call = NULL, *__callstatic = NULL, *__tostring = NULL, *__debugInfo = NULL, *__cmp = NULL;
 	zend_string *lowercase_name;
 	size_t fname_len;
 	const char *lc_class_name = NULL;
@@ -2358,6 +2358,8 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 				scope->ce_flags |= ZEND_ACC_USE_GUARDS;
 			} else if (zend_string_equals_literal(lowercase_name, ZEND_DEBUGINFO_FUNC_NAME)) {
 				__debugInfo = reg_function;
+			} else if (zend_string_equals_literal(lowercase_name, ZEND_CMP_FUNC_NAME)) {
+				__cmp = reg_function;
 			} else {
 				reg_function = NULL;
 			}
@@ -2398,6 +2400,7 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 		scope->__unset = __unset;
 		scope->__isset = __isset;
 		scope->__debugInfo = __debugInfo;
+		scope->__cmp = __cmp;
 		if (ctor) {
 			ctor->common.fn_flags |= ZEND_ACC_CTOR;
 			if (ctor->common.fn_flags & ZEND_ACC_STATIC) {
@@ -2463,6 +2466,11 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 		if (__debugInfo) {
 			if (__debugInfo->common.fn_flags & ZEND_ACC_STATIC) {
 				zend_error(error_type, "Method %s::%s() cannot be static", ZSTR_VAL(scope->name), ZSTR_VAL(__debugInfo->common.function_name));
+			}
+		}
+		if (__cmp) {
+			if (__cmp->common.fn_flags & ZEND_ACC_STATIC) {
+				zend_error(error_type, "Method %s::%s() cannot be static", ZSTR_VAL(scope->name), ZSTR_VAL(__cmp->common.function_name));
 			}
 		}
 

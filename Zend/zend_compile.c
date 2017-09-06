@@ -1812,6 +1812,7 @@ ZEND_API void zend_initialize_class_data(zend_class_entry *ce, zend_bool nullify
 		ce->serialize_func = NULL;
 		ce->unserialize_func = NULL;
 		ce->__debugInfo = NULL;
+		ce->__cmp = NULL;
 		if (ce->type == ZEND_INTERNAL_CLASS) {
 			ce->info.internal.module = NULL;
 			ce->info.internal.builtin_functions = NULL;
@@ -5773,6 +5774,11 @@ void zend_begin_method_decl(zend_op_array *op_array, zend_string *name, zend_boo
 				zend_error(E_WARNING, "The magic method __debugInfo() must have "
 					"public visibility and cannot be static");
 			}
+		} else if (zend_string_equals_literal(lcname, ZEND_CMP_FUNC_NAME)) {
+			if (!is_public || is_static) {
+				zend_error(E_WARNING, "The magic method __cmp() must have "
+					"public visibility and cannot be static");
+			}
 		}
 	} else {
 		if (!in_trait && zend_string_equals_ci(lcname, ce->name)) {
@@ -5842,6 +5848,12 @@ void zend_begin_method_decl(zend_op_array *op_array, zend_string *name, zend_boo
 					"public visibility and cannot be static");
 			}
 			ce->__debugInfo = (zend_function *) op_array;
+		} else if (zend_string_equals_literal(lcname, ZEND_CMP_FUNC_NAME)) {
+			if (!is_public || is_static) {
+				zend_error(E_WARNING, "The magic method __cmp() must have "
+					"public visibility and cannot be static");
+			}
+			ce->__cmp = (zend_function *) op_array;
 		} else if (!is_static) {
 			op_array->fn_flags |= ZEND_ACC_ALLOW_STATIC;
 		}
