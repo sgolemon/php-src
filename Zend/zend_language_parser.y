@@ -72,7 +72,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %nonassoc T_IS_EQUAL T_IS_NOT_EQUAL T_IS_IDENTICAL T_IS_NOT_IDENTICAL T_SPACESHIP
 %nonassoc '<' T_IS_SMALLER_OR_EQUAL '>' T_IS_GREATER_OR_EQUAL
 %left T_SL T_SR
-%left '+' '-' '.'
+%left '+' '-' '.' T_PIPE_OPERATOR
 %left '*' '/' '%'
 %right '!'
 %nonassoc T_INSTANCEOF
@@ -192,6 +192,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_EXTENDS    "extends (T_EXTENDS)"
 %token T_IMPLEMENTS "implements (T_IMPLEMENTS)"
 %token T_OBJECT_OPERATOR "-> (T_OBJECT_OPERATOR)"
+%token T_PIPE_OPERATOR   "|> (T_PIPE_OPERATOR)"
 %token T_DOUBLE_ARROW    "=> (T_DOUBLE_ARROW)"
 %token T_LIST            "list (T_LIST)"
 %token T_ARRAY           "array (T_ARRAY)"
@@ -951,6 +952,9 @@ expr_without_variable:
 			{ $$ = zend_ast_create(ZEND_AST_GREATER_EQUAL, $1, $3); }
 	|	expr T_SPACESHIP expr
 			{ $$ = zend_ast_create_binary_op(ZEND_SPACESHIP, $1, $3); }
+	|	expr T_PIPE_OPERATOR expr
+			{ $$ = zend_ast_create(ZEND_AST_CALL, $3,
+				zend_ast_create_list(1, ZEND_AST_ARG_LIST, $1)); }
 	|	expr T_INSTANCEOF class_name_reference
 			{ $$ = zend_ast_create(ZEND_AST_INSTANCEOF, $1, $3); }
 	|	'(' expr ')' { $$ = $2; }
