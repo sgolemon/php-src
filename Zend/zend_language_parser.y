@@ -257,6 +257,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <num> returns_ref function is_reference is_variadic variable_modifiers
 %type <num> method_modifiers non_empty_member_modifiers member_modifier
 %type <num> class_modifiers class_modifier use_type backup_fn_flags
+%type <num> lambda_open
 
 %type <str> backup_doc_comment
 
@@ -988,6 +989,17 @@ expr_without_variable:
 			{ $$ = zend_ast_create_decl(ZEND_AST_CLOSURE, $3 | $14 | ZEND_ACC_STATIC, $2, $4,
 			      zend_string_init("{closure}", sizeof("{closure}") - 1, 0),
 			      $6, $8, $12, $9); CG(extra_fn_flags) = $10; }
+	|	lambda_open '{' expr '}' lexical_vars
+			{ $$ = zend_ast_create_decl(ZEND_AST_CLOSURE, 0, $1, NULL,
+				zend_string_init("{lambda}", sizeof("{lambda}") - 1, 0),
+				zend_ast_create_list(0, ZEND_AST_PARAM_LIST), /* parameters */
+				$5, /* lexical_vars */
+				zend_ast_create(ZEND_AST_RETURN, $3), /* stmt list */
+				NULL /* return type */); }
+;
+
+lambda_open:
+	'&' { $$ = CG(zend_lineno); }
 ;
 
 function:
