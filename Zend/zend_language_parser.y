@@ -996,6 +996,15 @@ expr_without_variable:
 				$5, /* lexical_vars */
 				zend_ast_create(ZEND_AST_RETURN, $3), /* stmt list */
 				NULL /* return type */); }
+	|	'$' T_LNUMBER
+			{
+				zval fga;
+				ZVAL_STRING(&fga, "\\func_get_arg");
+				$$ = zend_ast_create(ZEND_AST_CALL,
+					zend_ast_create_zval_ex(&fga, ZEND_NAME_FQ),
+					zend_ast_create_list(1, ZEND_AST_ARG_LIST, $2)
+				);
+			}
 ;
 
 lambda_open:
