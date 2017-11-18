@@ -252,11 +252,11 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> lexical_var_list encaps_list
 %type <ast> array_pair non_empty_array_pair_list array_pair_list possible_array_pair
 %type <ast> isset_variable type return_type type_expr
-%type <ast> identifier
+%type <ast> identifier list_comprehension_expr yield_expr
 
 %type <num> returns_ref function is_reference is_variadic variable_modifiers
 %type <num> method_modifiers non_empty_member_modifiers member_modifier
-%type <num> class_modifiers class_modifier use_type backup_fn_flags
+%type <num> class_modifiers class_modifier use_type backup_fn_flags line_number
 
 %type <str> backup_doc_comment
 
@@ -980,10 +980,7 @@ expr:
 	|	scalar { $$ = $1; }
 	|	'`' backticks_expr '`' { $$ = zend_ast_create(ZEND_AST_SHELL_EXEC, $2); }
 	|	T_PRINT expr { $$ = zend_ast_create(ZEND_AST_PRINT, $2); }
-	|	T_YIELD { $$ = zend_ast_create(ZEND_AST_YIELD, NULL, NULL); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
-	|	T_YIELD expr { $$ = zend_ast_create(ZEND_AST_YIELD, $2, NULL); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
-	|	T_YIELD expr T_DOUBLE_ARROW expr { $$ = zend_ast_create(ZEND_AST_YIELD, $4, $2); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
-	|	T_YIELD_FROM expr { $$ = zend_ast_create(ZEND_AST_YIELD_FROM, $2); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
+	|	yield_expr { $$ = $1; }
 	|	function returns_ref backup_doc_comment '(' parameter_list ')' lexical_vars return_type
 		backup_fn_flags '{' inner_statement_list '}' backup_fn_flags
 			{ $$ = zend_ast_create_decl(ZEND_AST_CLOSURE, $2 | $13, $1, $3,
@@ -994,6 +991,41 @@ expr:
 			{ $$ = zend_ast_create_decl(ZEND_AST_CLOSURE, $3 | $14 | ZEND_ACC_STATIC, $2, $4,
 			      zend_string_init("{closure}", sizeof("{closure}") - 1, 0),
 			      $6, $8, $12, $9); CG(extra_fn_flags) = $10; }
+	|	'[' backup_fn_flags line_number backup_doc_comment
+			T_FOR expr T_AS foreach_variable list_comprehension_expr lexical_vars
+			backup_fn_flags ']'
+			{	$$ = zend_ast_create(ZEND_AST_CALL,
+						zend_ast_create_decl(ZEND_AST_CLOSURE, $11 /* bff */, $3 /* lineno */, $4 /* bdc */,
+						zend_string_init("{list-comprehension}", sizeof("{list-comprehension}") - 1, 0),
+						zend_ast_create_list(1, ZEND_AST_PARAM_LIST,
+							zend_ast_create_ex(ZEND_AST_PARAM, 0, NULL,
+								zend_ast_create_zval_from_str(
+									zend_string_init("\0iterable", sizeof("\0iterable") - 1, 0)),
+								NULL)),
+						$10, /* lexical_vars */
+						zend_ast_create_list(1, ZEND_AST_STMT_LIST,
+							zend_ast_create(ZEND_AST_FOREACH,
+								zend_ast_create(ZEND_AST_VAR,
+									zend_ast_create_zval_from_str(
+										zend_string_init("\0iterable", sizeof("\0iterable") - 1, 0))),
+								$8, NULL, $9)),
+						NULL /* return type */),
+					zend_ast_create_list(1, ZEND_AST_ARG_LIST, $6));
+				CG(extra_fn_flags) = $2; }
+;
+
+yield_expr:
+		T_YIELD { $$ = zend_ast_create(ZEND_AST_YIELD, NULL, NULL); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
+	|	T_YIELD expr { $$ = zend_ast_create(ZEND_AST_YIELD, $2, NULL); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
+	|	T_YIELD expr T_DOUBLE_ARROW expr { $$ = zend_ast_create(ZEND_AST_YIELD, $4, $2); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
+	|	T_YIELD_FROM expr { $$ = zend_ast_create(ZEND_AST_YIELD_FROM, $2); CG(extra_fn_flags) |= ZEND_ACC_GENERATOR; }
+;
+
+list_comprehension_expr:
+		yield_expr { $$ = $1; }
+	|	T_IF expr yield_expr
+			{ $$ = zend_ast_create_list(ZEND_AST_IF, 1,
+					zend_ast_create(ZEND_AST_IF_ELEM, $2, $3)); }
 ;
 
 function:
@@ -1006,6 +1038,10 @@ backup_doc_comment:
 
 backup_fn_flags:
 	/* empty */ { $$ = CG(extra_fn_flags); CG(extra_fn_flags) = 0; }
+;
+
+line_number:
+	{ $$ = CG(zend_lineno); }
 ;
 
 returns_ref:
