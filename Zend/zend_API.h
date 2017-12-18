@@ -691,6 +691,7 @@ END_EXTERN_C()
 #define FAST_ZPP 1
 
 #define Z_EXPECTED_TYPES(_) \
+	_(Z_EXPECTED_ANY,		"mixed") \
 	_(Z_EXPECTED_LONG,		"integer") \
 	_(Z_EXPECTED_BOOL,		"boolean") \
 	_(Z_EXPECTED_STRING,	"string") \
@@ -728,7 +729,7 @@ ZEND_API ZEND_COLD void ZEND_FASTCALL zend_wrong_callback_error(zend_bool throw_
 		int _num_args = EX_NUM_ARGS(); \
 		int _i; \
 		zval *_real_arg, *_arg = NULL; \
-		zend_expected_type _expected_type = IS_UNDEF; \
+		zend_expected_type _expected_type = Z_EXPECTED_ANY; \
 		char *_error = NULL; \
 		zend_bool _dummy; \
 		zend_bool _optional = 0; \
