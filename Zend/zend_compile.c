@@ -7345,6 +7345,31 @@ void zend_compile_conditional(znode *result, zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_conditional_assign(znode *result, zend_ast *ast) /* {{{ */
+{
+	zend_ast *var_ast = ast->child[0];
+	/* default_ast = ast->child[1], handled by zend_compile_assign() */
+	zend_ast *cond_ast = ast->child[2];
+
+	znode var_node, cond_node;
+	uint32_t opnum_jmp, opnum_jmpnz;
+	zend_op *opline;
+
+	zend_compile_expr(&cond_node, cond_ast);
+	opnum_jmpnz = zend_emit_cond_jump(ZEND_JMPNZ, &cond_node, 0);
+
+	zend_compile_assign(result, ast);
+	opnum_jmp = zend_emit_jump(0);
+
+	zend_update_jump_target_to_next(opnum_jmpnz);
+	zend_compile_expr(&var_node, var_ast);
+	opline = zend_emit_op(NULL, ZEND_QM_ASSIGN, &var_node, NULL);
+	SET_NODE(opline->result, result);
+
+	zend_update_jump_target_to_next(opnum_jmp);
+}
+/* }}} */
+
 void zend_compile_coalesce(znode *result, zend_ast *ast) /* {{{ */
 {
 	zend_ast *expr_ast = ast->child[0];
@@ -8306,6 +8331,9 @@ void zend_compile_expr(znode *result, zend_ast *ast) /* {{{ */
 			return;
 		case ZEND_AST_CONDITIONAL:
 			zend_compile_conditional(result, ast);
+			return;
+		case ZEND_AST_CONDITIONAL_ASSIGN:
+			zend_compile_conditional_assign(result, ast);
 			return;
 		case ZEND_AST_COALESCE:
 			zend_compile_coalesce(result, ast);
