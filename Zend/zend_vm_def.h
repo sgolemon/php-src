@@ -5318,7 +5318,16 @@ ZEND_VM_COLD_CONST_HANDLER(21, ZEND_CAST, CONST|TMP|VAR|CV, ANY, TYPE)
 					} else {
 						ZVAL_EMPTY_ARRAY(result);
 					}
-				} else if (Z_OBJ_HT_P(expr)->get_properties) {
+					break;
+				}
+
+				if (Z_OBJ_HT_P(expr)->cast_object) {
+					if (SUCCESS == Z_OBJ_HT_P(expr)->cast_object(expr, result, opline->extended_value)) {
+						break;
+					}
+				}
+
+				if (Z_OBJ_HT_P(expr)->get_properties) {
 					HashTable *obj_ht = Z_OBJ_HT_P(expr)->get_properties(expr);
 					if (obj_ht) {
 						/* fast copy */

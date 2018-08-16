@@ -1715,6 +1715,25 @@ ZEND_API int zend_std_cast_object_tostring(zval *readobj, zval *writeobj, int ty
 				}
 			}
 			return FAILURE;
+		case IS_ARRAY:
+			ce = Z_OBJCE_P(readobj);
+			if (!ce->__toarray ||
+				!zend_call_method_with_0_params(readobj, ce, &ce->__toarray, "__toarray", &retval)) {
+				return FAILURE;
+			}
+			if (UNEXPECTED(EG(exception))) {
+				// Let the engine bubble up the exception
+				ZVAL_NULL(writeobj);
+				return SUCCESS;
+			}
+			if (EXPECTED(Z_TYPE(retval) == IS_ARRAY)) {
+				ZVAL_COPY_VALUE(writeobj, &retval);
+			} else {
+				zval_ptr_dtor(&retval);
+				ZVAL_EMPTY_ARRAY(writeobj);
+				zend_error(E_RECOVERABLE_ERROR, "Method %s::__toArray() must return an array value", ZSTR_VAL(ce->name));
+			}
+			return SUCCESS;
 		case _IS_BOOL:
 			ZVAL_TRUE(writeobj);
 			return SUCCESS;
