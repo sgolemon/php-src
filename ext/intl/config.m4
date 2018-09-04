@@ -21,6 +21,7 @@ if test "$PHP_INTL" != "no"; then
   PHP_NEW_EXTENSION(intl, php_intl.c \
     intl_error.c \
     intl_convert.c \
+	bidi/bidi.c \
     collator/collator.c \
     collator/collator_class.c \
     collator/collator_sort.c \

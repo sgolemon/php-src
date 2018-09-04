@@ -86,6 +86,7 @@
 
 #include "idn/idn.h"
 #include "uchar/uchar.h"
+#include "bidi/php_bidi.h"
 
 #if U_ICU_VERSION_MAJOR_NUM * 1000 + U_ICU_VERSION_MINOR_NUM >= 4002
 # include "spoofchecker/spoofchecker_class.h"
@@ -1000,6 +1001,9 @@ PHP_MINIT_FUNCTION( intl )
 
 	/* IntlChar class */
 	php_uchar_minit(INIT_FUNC_ARGS_PASSTHRU);
+
+	/* IntlBidi class */
+	PHP_MINIT(intl_bidi)(INIT_FUNC_ARGS_PASSTHRU);
 
 	return SUCCESS;
 }
