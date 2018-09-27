@@ -29,6 +29,7 @@ static zend_object_handlers bidi_object_handlers;
 
 typedef struct _php_intl_bidi_object {
 	UBiDi *bidi;
+	UBiDiLevel *embeddingLevels;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
 	zend_object std;
@@ -98,6 +99,8 @@ static PHP_METHOD(IntlBidi, __construct) {
 			return;
 		}
 	}
+
+	objval->embeddingLevels = NULL;
 
 	error = U_ZERO_ERROR;
 	objval->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
@@ -284,20 +287,22 @@ setContext_cleanup:
 /* }}} */
 #endif /* ICU >= 4.8 */
 
-/* {{{ proto self IntlBidi::setPara(string $paragraph[, int $paraLevel = IntlBidi::DEFAULT_LTR]) */
+/* {{{ proto self IntlBidi::setPara(string $paragraph[, int $paraLevel = IntlBidi::DEFAULT_LTR[, string $embeddingLevels]]) */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setpara_arginfo, ZEND_RETURN_VALUE, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, paragraph, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, paraLevel, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, embeddingLevels, IS_STRING, 1)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setPara) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_string *para;
+	zend_string *embeddingLevels = NULL;
 	UChar *upara = NULL;
 	int32_t upara_len = 0;
 	zend_long paraLevel = UBIDI_DEFAULT_LTR;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "S|l", &para, &paraLevel) == FAILURE) {
+	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "S|l", &para, &paraLevel, &embeddingLevels) == FAILURE) {
 		return;
 	}
 
@@ -308,9 +313,21 @@ static PHP_METHOD(IntlBidi, setPara) {
 		goto setPara_cleanup;
 	}
 
+	// TODO: maybe check for the length of the embeddingLevels.
+	if (embeddingLevels != NULL && ZSTR_LEN(embeddingLevels) > 0) {
+		if (objval->embeddingLevels != NULL) {
+			objval->embeddingLevels = (UBiDiLevel*)erealloc(objval->embeddingLevels, ZSTR_LEN(embeddingLevels));
+		} else {
+			objval->embeddingLevels = (UBiDiLevel*)emalloc(ZSTR_LEN(embeddingLevels));
+		}
+		memcpy(objval->embeddingLevels, ZSTR_VAL(embeddingLevels), ZSTR_LEN(embeddingLevels));
+	} else {
+		efree(objval->embeddingLevels);
+		objval->embeddingLevels = NULL;
+	}
+
 	error = U_ZERO_ERROR;
-	/* TODO: embeddingLevels */
-	ubidi_setPara(objval->bidi, upara, upara_len, (UBiDiLevel)paraLevel, NULL, &error);
+	ubidi_setPara(objval->bidi, upara, upara_len, (UBiDiLevel)paraLevel, objval->embeddingLevels, &error);
 	if (U_FAILURE(error)) {
 		THROW_UFAILURE(objval, "setPara", error);
 		goto setPara_cleanup;
@@ -851,6 +868,7 @@ static void bidi_object_dtor(zend_object *obj) {
 	if (objval->prologue) { efree(objval->prologue); }
 	if (objval->text)     { efree(objval->text); }
 	if (objval->epilogue) { efree(objval->epilogue); }
+	if (objval->embeddingLevels) { efree(objval->embeddingLevels); }
 
 	intl_error_reset(&(objval->error));
 }
