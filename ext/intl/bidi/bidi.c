@@ -185,7 +185,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getReorderingMode) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_getReorderingMode(objval->bidi));
+	RETURN_LONG(ubidi_getReorderingMode(objval->bidi));
 }
 /* }}} */
 
@@ -212,7 +212,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getReorderingOptions) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_getReorderingOptions(objval->bidi));
+	RETURN_LONG(ubidi_getReorderingOptions(objval->bidi));
 }
 /* }}} */
 
