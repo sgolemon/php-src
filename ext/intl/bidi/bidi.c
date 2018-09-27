@@ -777,8 +777,11 @@ static PHP_METHOD(IntlBidi, getReordered) {
 
 	if (options & UBIDI_INSERT_LRM_FOR_NUMERIC) {
 		error = U_ZERO_ERROR;
-		utext_len = ubidi_getLength(objval->bidi) + (2 * ubidi_countRuns(objval->bidi, &error));
-		THROW_UFAILURE(objval, "getReordered", error);
+		utext_len = ubidi_getLength(objval->bidi) + 2 * ubidi_countRuns(objval->bidi, &error);
+		if (U_FAILURE(error)) {
+			THROW_UFAILURE(objval, "getReordered", error);
+			return;
+		}
 	} else if (options & UBIDI_REMOVE_BIDI_CONTROLS) {
 		utext_len = ubidi_getLength(objval->bidi);
 	} else {
