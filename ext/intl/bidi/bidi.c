@@ -353,32 +353,84 @@ setPara_cleanup:
 }
 /* }}} */
 
-/* {{{ proto self IntlBidi::setLine(int $tart, int $limit, IntlBidi $line) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setline_arginfo, ZEND_RETURN_VALUE, 3, IS_OBJECT, 0)
+/* {{{ proto IntlBidi IntlBidi::setLine(int $start, int $limit) */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setline_arginfo, ZEND_RETURN_VALUE, 2, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, start, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, limit, IS_LONG, 0)
-	ZEND_ARG_TYPE_INFO(0, line, IS_OBJECT, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setLine) {
 	zend_long start, limit;
-	zend_object *zline;
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	php_intl_bidi_object *lineval;
+	zval retval;
+	zend_function * constructor;
+	zend_fcall_info fci;
+	zend_fcall_info_cache fcc;
+	php_intl_bidi_object *objval, *lineval;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "llO", &start, &limit, &zline, php_intl_bidi_ce) == FAILURE) {
-		return;
+	// Parse parameters.
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_LONG(start)
+		Z_PARAM_LONG(limit)
+	ZEND_PARSE_PARAMETERS_END();
+
+	// init return value as new object. (This code is from php_reflection ReflectionClass::newInstance())
+
+	// init the return value as a IntlBidi instance.
+	object_init_ex(return_value, php_intl_bidi_ce);
+
+
+	// get the constructor.
+	constructor = Z_OBJ_HT_P(return_value)->get_constructor(Z_OBJ_P(return_value));
+
+	fci.size = sizeof(fci);
+	ZVAL_UNDEF(&fci.function_name);
+	fci.object = Z_OBJ_P(return_value);
+	fci.retval = &retval;
+	fci.param_count = 0;
+	fci.params = NULL;
+	fci.no_separation = 1;
+
+	fcc.function_handler = constructor;
+	fcc.called_scope = Z_OBJCE_P(return_value);
+	fcc.object = Z_OBJ_P(return_value);
+
+	int ret = zend_call_function(&fci, &fcc);
+	zval_ptr_dtor(&retval);
+
+	//TODO: keep objval alive while lineval is alive or setPara() gets called on lineval.
+	// @see http://icu-project.org/apiref/icu4c/ubidi_8h.html#ac7d96b281cd6ab2d56900bfdc37c808a
+	// altough i am not sure about "destroying" or "reusing" (if this is also the case when other functions get called)?
+	// it should be right to return a new istance, insteadof overriding a old one, to prevent circular references.
+	// also setPara should not be callable while an object gets referenced, or the referenced objects need to be reset.
+	// I tried to implement it, but i got stuck on that unset() resets the reference count.
+
+
+	// get the instance.
+	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+
+	if (ret == FAILURE) {
+		THROW_UFAILURE(objval, "setLine", ret);
+		goto setLine_cleanup;
 	}
 
-	lineval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	// get the bidi istance.
+	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));	
+
+	// just call bidi, because the return value is already set.
 	error = U_ZERO_ERROR;
-	ubidi_setLine(objval->bidi, start, limit, lineval->bidi, &error);
+	ubidi_setLine(objval->bidi, start, limit - 1, lineval->bidi, &error);
 	if (U_FAILURE(error)) {
 		THROW_UFAILURE(objval, "setLine", error);
-		return;
+		goto setLine_cleanup;
 	}
 
-	RETURN_ZVAL(getThis(), 1, 0);
+	RETURN_ZVAL(return_value, 0, 0);
+setLine_cleanup:
+	if (return_value) {
+		zval_ptr_dtor(return_value);
+	}
+
+	return;
 }
 /* }}} */
 
