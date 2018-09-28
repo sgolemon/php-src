@@ -835,7 +835,7 @@ static PHP_METHOD(IntlBidi, getReordered) {
 
 	if (options & UBIDI_INSERT_LRM_FOR_NUMERIC) {
 		error = U_ZERO_ERROR;
-		utext_len = ubidi_getLength(objval->bidi) + 2 * ubidi_countRuns(objval->bidi, &error);
+		utext_len = ubidi_getLength(objval->bidi) + (2 * ubidi_countRuns(objval->bidi, &error));
 		if (U_FAILURE(error)) {
 			THROW_UFAILURE(objval, "getReordered", error);
 			return;
@@ -855,6 +855,7 @@ static PHP_METHOD(IntlBidi, getReordered) {
 		return;
 	}
 
+	// HERE IT CRASHES WHEN RUNNING IntlBidi_getReordered_varian.phpt (not enough memory allocated for the string).
 	error = U_ZERO_ERROR;
 	ret = intl_convert_utf16_to_utf8(utext, utext_len, &error);
 	efree(utext);
