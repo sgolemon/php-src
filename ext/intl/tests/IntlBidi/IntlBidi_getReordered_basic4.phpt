@@ -24,7 +24,6 @@ Timo Scholz <timo.scholz@setasign.com>
 include 'IntlBidi_ut_common.inc';
 
 $testCases = [
-    'ab 234 896 de',
     'abcGHI',
     'a.>67->',
     '-=%$123/ *',
@@ -64,8 +63,6 @@ for ($i = 0, $iMax = \count($testCases); $i < $iMax; $i++) {
 ?>
 ==DONE==
 --EXPECT--
-string(15) "ab 234 @896@ de"
-string(13) "de 896 ab 234"
 string(6) "GHIabc"
 string(6) "GHIabc"
 string(7) "<-67<.a"
