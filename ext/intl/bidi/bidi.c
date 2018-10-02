@@ -319,7 +319,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 
 	// TODO: maybe check for the length of the embeddingLevels.
 	if (embeddingLevels != NULL && ZSTR_LEN(embeddingLevels) > 0) {
-			objval->embeddingLevels = (UBiDiLevel*)erealloc(objval->embeddingLevels, ZSTR_LEN(embeddingLevels));
+		objval->embeddingLevels = (UBiDiLevel*)erealloc(objval->embeddingLevels, ZSTR_LEN(embeddingLevels));
 		memcpy(objval->embeddingLevels, ZSTR_VAL(embeddingLevels), ZSTR_LEN(embeddingLevels));
 	} else {
 		efree(objval->embeddingLevels);
@@ -361,19 +361,15 @@ static PHP_METHOD(IntlBidi, setLine) {
 	php_intl_bidi_object *objval, *lineval;
 	UErrorCode error;
 
-	// Parse parameters.
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_LONG(start)
 		Z_PARAM_LONG(limit)
 	ZEND_PARSE_PARAMETERS_END();
 
-	// init return value as new object. (This code is from php_reflection ReflectionClass::newInstance())
 
-	// init the return value as a IntlBidi instance.
 	object_init_ex(return_value, php_intl_bidi_ce);
 
 
-	// get the constructor.
 	constructor = Z_OBJ_HT_P(return_value)->get_constructor(Z_OBJ_P(return_value));
 
 	fci.size = sizeof(fci);
@@ -399,7 +395,6 @@ static PHP_METHOD(IntlBidi, setLine) {
 	// I tried to implement it, but i got stuck on that unset() resets the reference count.
 
 
-	// get the instance.
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 
 	if (ret == FAILURE) {
@@ -407,10 +402,8 @@ static PHP_METHOD(IntlBidi, setLine) {
 		goto setLine_cleanup;
 	}
 
-	// get the bidi istance.
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));	
 
-	// just call bidi, because the return value is already set.
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi, start, limit - 1, lineval->bidi, &error);
 	if (U_FAILURE(error)) {
@@ -423,8 +416,6 @@ setLine_cleanup:
 	if (return_value) {
 		zval_ptr_dtor(return_value);
 	}
-
-	return;
 }
 /* }}} */
 
