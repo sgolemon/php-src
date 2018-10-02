@@ -102,8 +102,6 @@ static PHP_METHOD(IntlBidi, __construct) {
 		}
 	}
 
-	objval->embeddingLevels = NULL;
-
 	error = U_ZERO_ERROR;
 	objval->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
 	if (U_FAILURE(error)) {
