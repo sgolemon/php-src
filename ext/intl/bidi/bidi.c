@@ -319,11 +319,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 
 	// TODO: maybe check for the length of the embeddingLevels.
 	if (embeddingLevels != NULL && ZSTR_LEN(embeddingLevels) > 0) {
-		if (objval->embeddingLevels != NULL) {
 			objval->embeddingLevels = (UBiDiLevel*)erealloc(objval->embeddingLevels, ZSTR_LEN(embeddingLevels));
-		} else {
-			objval->embeddingLevels = (UBiDiLevel*)emalloc(ZSTR_LEN(embeddingLevels));
-		}
 		memcpy(objval->embeddingLevels, ZSTR_VAL(embeddingLevels), ZSTR_LEN(embeddingLevels));
 	} else {
 		efree(objval->embeddingLevels);
