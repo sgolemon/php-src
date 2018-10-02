@@ -233,8 +233,8 @@ static PHP_METHOD(IntlBidi, setContext) {
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_STR(prologue)
-		Z_PARAM_STR(epilogue)
+		Z_PARAM_STR_EX(prologue)
+		Z_PARAM_STR_EX(epilogue)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (prologue && ZSTR_LEN(prologue)) {
@@ -307,7 +307,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 		Z_PARAM_STR(para)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(paraLevel)
-		Z_PARAM_STR(embeddingLevels)
+		Z_PARAM_STR_EX(embeddingLevels)
 	ZEND_PARSE_PARAMETERS_END();
 
 	error = U_ZERO_ERROR;
