@@ -449,9 +449,7 @@ static PHP_METHOD(IntlBidi, getBaseDirection) {
 		goto getBaseDirection_cleanup;
 	}
 
-	zend_long result = ubidi_getBaseDirection(utext, utext_len);
-	//efree(utext);
-	RETURN_LONG(result);
+	RETURN_LONG(ubidi_getBaseDirection(utext, utext_len));
 
 getBaseDirection_cleanup:
 	if (utext) {
@@ -769,40 +767,6 @@ static PHP_METHOD(IntlBidi, getResultLength) {
 }
 /* }}} */
 
-/* {{{ proto int IntlBidi::getCustomizedClass(string $char) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getcustomclass_arginfo, ZEND_RETURN_VALUE, 1, IS_LONG, 0)
-	ZEND_ARG_TYPE_INFO(0, character, IS_STRING, 0)
-ZEND_END_ARG_INFO();
-static PHP_METHOD(IntlBidi, getCustomizedClass) {
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	zend_string *text;
-	int32_t pos = 0;
-	size_t len;
-	UChar32 c;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_STR(text)
-	ZEND_PARSE_PARAMETERS_END();
-
-	if (ZSTR_LEN(text) > 4) {
-		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
-		return;
-	}
-
-	len = ZSTR_LEN(text);
-
-	U8_NEXT(ZSTR_VAL(text), pos, len, c);
-	if ((size_t)pos != len) {
-		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
-		return;
-	}
-
-	RETURN_LONG(ubidi_getCustomizedClass(objval->bidi, c));
-}
-/* }}} */
-
 /* {{{ proto string IntlBidi::getReordered(int $options) */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getreordered_arginfo, ZEND_RETURN_VALUE, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, options, IS_LONG, 0)
@@ -896,7 +860,6 @@ static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, getVisualMap, bidi_getvisualmap_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getProcessedLength, bidi_getprocessedlen_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getResultLength, bidi_getresultlen_arginfo, ZEND_ACC_PUBLIC)
-	PHP_ME(IntlBidi, getCustomizedClass, bidi_getcustomclass_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getReordered, bidi_getreordered_arginfo, ZEND_ACC_PUBLIC)
 
 	PHP_FE_END
