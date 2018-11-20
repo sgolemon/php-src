@@ -392,9 +392,6 @@ static PHP_METHOD(IntlBidi, setLine) {
 	zend_call_function(&fci, &fcc);
 	zval_ptr_dtor(&retval);
 
-	// 	php_intl_bidi_invokeConstruction(return_value, 0, 0);
-	// zval_ptr_dtor(return_value);
-
 	//TODO: keep objval alive while lineval is alive or setPara() gets called on lineval.
 	// @see http://icu-project.org/apiref/icu4c/ubidi_8h.html#ac7d96b281cd6ab2d56900bfdc37c808a
 	// altough i am not sure about "destroying" or "reusing" (if this is also the case when other functions get called)?
@@ -403,7 +400,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 	// I tried to implement it, but i got stuck on that unset() resets the reference count.
 
 
-objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
 
 	error = U_ZERO_ERROR;
@@ -857,7 +854,6 @@ static PHP_METHOD(IntlBidi, getReordered) {
 }
 /* }}} */
 
-// TODO: leave this in ??? this is a new feature.
 /* {{{ proto int IntlBidi::getLength() */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getlength_arginfo, ZEND_RETURN_VALUE, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
