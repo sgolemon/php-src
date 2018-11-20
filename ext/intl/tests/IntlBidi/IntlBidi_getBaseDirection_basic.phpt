@@ -8,9 +8,19 @@ Timo Scholz
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
 --FILE--
 <?php
-
-// in this test we compare with true, since we dont want to rely on the const value of IntlBidi.
-
+/**
+ * © 2016 and later: Unicode, Inc. and others.
+ * License & terms of use: http://www.unicode.org/copyright.html#License
+ *
+ *******************************************************************************
+ *   Copyright (C) 2001-2013, International Business Machines
+ *   Corporation and others.  All Rights Reserved.
+ *******************************************************************************
+ */
+/**
+ * Ported from Java.
+ * Original: https://github.com/unicode-org/icu/blob/778d0a6d1d46faa724ead19613bda84621794b72/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestBidi.java#L531
+ */
 $bidi = new IntlBidi();
 
 //mixed english
