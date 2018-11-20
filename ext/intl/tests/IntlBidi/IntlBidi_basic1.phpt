@@ -51,7 +51,7 @@ for ($testNumber = 0; $testNumber < $nTests; $testNumber++) {
 
     $bidi = new \IntlBidi();
     $bidi->setInverse(true);
-    $levels = str_repeat("\0", IntlBidi::MAX_EXPLICIT_LEVEL);
+    $levels = str_repeat("\0", \IntlBidi::MAX_EXPLICIT_LEVEL);
     for ($i = 0; $i < 10; $i++) {
         $levels[$i] = chr($i + 1);
     }
