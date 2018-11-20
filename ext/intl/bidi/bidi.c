@@ -44,12 +44,12 @@ static inline zend_object *bidi_object_to_zend_object(php_intl_bidi_object *obj)
 }
 
 #define THROW_UFAILURE(obj, fname, error) \
-	php_bidi_throw_failure(obj, error, \
+	php_intl_bidi_throw_failure(obj, error, \
 	                       "IntlBidi::" fname "() returned error " ZEND_LONG_FMT ": %s", \
 	                       (zend_long)error, u_errorName(error))
 
-/* {{{ php_bidi_throw_failure */
-static inline void php_bidi_throw_failure(php_intl_bidi_object *objval,
+/* {{{ php_intl_bidi_throw_failure */
+static inline void php_intl_bidi_throw_failure(php_intl_bidi_object *objval,
                                           UErrorCode error, const char *format, ...) {
 	intl_error *err = objval ? &(objval->error) : NULL;
 	char message[1024];
@@ -64,6 +64,29 @@ static inline void php_bidi_throw_failure(php_intl_bidi_object *objval,
 }
 /* }}} */
 
+static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long maxRunCount, zend_long maxLength) {
+	UErrorCode error;
+	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(instance));
+
+	if (PG(memory_limit) > 0) {
+		if (maxLength == 0) {
+			maxLength = PG(memory_limit) / 2;
+		} else if (maxLength > PG(memory_limit)) {
+			php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+				"IntlBidi::__construct() given maxLength greater than memory_limit");
+			return;
+		}
+	}
+
+	error = U_ZERO_ERROR;
+
+	objval->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
+	if (U_FAILURE(error)) {
+		THROW_UFAILURE(NULL, "__construct", error);
+		return;
+	}
+}
+
 /* {{{ proto void IntlBidi::__construct([int $maxLength = 0, [int $maxRunCount = 0]]) */
 ZEND_BEGIN_ARG_INFO_EX(bidi_ctor_arginfo, 0, ZEND_RETURN_VALUE, 0)
 	ZEND_ARG_TYPE_INFO(0, maxLength, IS_LONG, 0)
@@ -71,8 +94,6 @@ ZEND_BEGIN_ARG_INFO_EX(bidi_ctor_arginfo, 0, ZEND_RETURN_VALUE, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, __construct) {
 	zend_long maxLength = 0, maxRunCount = 0;
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	UErrorCode error;
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
@@ -81,33 +102,18 @@ static PHP_METHOD(IntlBidi, __construct) {
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (maxRunCount < 0) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
 			"IntlBidi::__construct() expects maxRunCount to be a non-negative value");
 		return;
 	}
 
 	if (maxLength < 0) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
 			"IntlBidi::__construct() expects maxLength to be a non-negative value");
 		return;
 	}
 
-	if (PG(memory_limit) > 0) {
-		if (maxLength == 0) {
-			maxLength = PG(memory_limit) / 2;
-		} else if (maxLength > PG(memory_limit)) {
-			php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-				"IntlBidi::__construct() given maxLength greater than memory_limit");
-			return;
-		}
-	}
-
-	error = U_ZERO_ERROR;
-	objval->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
-	if (U_FAILURE(error)) {
-		THROW_UFAILURE(NULL, "__construct", error);
-		return;
-	}
+	php_intl_bidi_invokeConstruction(getThis(), maxLength, maxRunCount);
 }
 /* }}} */
 
@@ -233,8 +239,8 @@ static PHP_METHOD(IntlBidi, setContext) {
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_STR_EX(prologue)
-		Z_PARAM_STR_EX(epilogue)
+		Z_PARAM_STR_EX(prologue, 0, 0)
+		Z_PARAM_STR_EX(epilogue, 0, 0)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (prologue && ZSTR_LEN(prologue)) {
@@ -307,7 +313,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 		Z_PARAM_STR(para)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(paraLevel)
-		Z_PARAM_STR_EX(embeddingLevels)
+		Z_PARAM_STR_EX(embeddingLevels, 0, 0)
 	ZEND_PARSE_PARAMETERS_END();
 
 	error = U_ZERO_ERROR;
@@ -317,7 +323,6 @@ static PHP_METHOD(IntlBidi, setPara) {
 		goto setPara_cleanup;
 	}
 
-	// TODO: maybe check for the length of the embeddingLevels.
 	if (embeddingLevels != NULL && ZSTR_LEN(embeddingLevels) > 0) {
 		objval->embeddingLevels = (UBiDiLevel*)erealloc(objval->embeddingLevels, ZSTR_LEN(embeddingLevels));
 		memcpy(objval->embeddingLevels, ZSTR_VAL(embeddingLevels), ZSTR_LEN(embeddingLevels));
@@ -354,12 +359,13 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setline_arginfo, ZEND_RETURN_VALUE,
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setLine) {
 	zend_long start, limit;
+	php_intl_bidi_object *objval, *lineval;
+	UErrorCode error;
+
 	zval retval;
 	zend_function * constructor;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
-	php_intl_bidi_object *objval, *lineval;
-	UErrorCode error;
 
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_LONG(start)
@@ -368,7 +374,6 @@ static PHP_METHOD(IntlBidi, setLine) {
 
 
 	object_init_ex(return_value, php_intl_bidi_ce);
-
 
 	constructor = Z_OBJ_HT_P(return_value)->get_constructor(Z_OBJ_P(return_value));
 
@@ -384,8 +389,11 @@ static PHP_METHOD(IntlBidi, setLine) {
 	fcc.called_scope = Z_OBJCE_P(return_value);
 	fcc.object = Z_OBJ_P(return_value);
 
-	int ret = zend_call_function(&fci, &fcc);
+	zend_call_function(&fci, &fcc);
 	zval_ptr_dtor(&retval);
+
+	// 	php_intl_bidi_invokeConstruction(return_value, 0, 0);
+	// zval_ptr_dtor(return_value);
 
 	//TODO: keep objval alive while lineval is alive or setPara() gets called on lineval.
 	// @see http://icu-project.org/apiref/icu4c/ubidi_8h.html#ac7d96b281cd6ab2d56900bfdc37c808a
@@ -395,14 +403,8 @@ static PHP_METHOD(IntlBidi, setLine) {
 	// I tried to implement it, but i got stuck on that unset() resets the reference count.
 
 
-	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-
-	if (ret == FAILURE) {
-		THROW_UFAILURE(objval, "setLine", ret);
-		goto setLine_cleanup;
-	}
-
-	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));	
+objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
 
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi, start, limit - 1, lineval->bidi, &error);
@@ -430,13 +432,13 @@ static PHP_METHOD(IntlBidi, getDirection) {
 /* }}} */
 
 /* {{{ proto int IntlBidi::getBaseDirection(string $text) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getbasedir_arginfo, ZEND_RETURN_VALUE, 0, IS_LONG, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getbasedir_arginfo, ZEND_RETURN_VALUE, 1, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getBaseDirection) {
 	zend_string *text;
 	UChar *utext = NULL;
-	int32_t utext_len;
+	int32_t utext_len = 0;
 	UErrorCode error;
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
@@ -450,7 +452,9 @@ static PHP_METHOD(IntlBidi, getBaseDirection) {
 		goto getBaseDirection_cleanup;
 	}
 
-	RETURN_LONG(ubidi_getBaseDirection(utext, utext_len));
+	zend_long result = ubidi_getBaseDirection(utext, utext_len);
+	//efree(utext);
+	RETURN_LONG(result);
 
 getBaseDirection_cleanup:
 	if (utext) {
@@ -784,7 +788,7 @@ static PHP_METHOD(IntlBidi, getCustomizedClass) {
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (ZSTR_LEN(text) > 4) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
 			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
 		return;
 	}
@@ -793,7 +797,7 @@ static PHP_METHOD(IntlBidi, getCustomizedClass) {
 
 	U8_NEXT(ZSTR_VAL(text), pos, len, c);
 	if ((size_t)pos != len) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
 			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
 		return;
 	}
@@ -840,7 +844,7 @@ static PHP_METHOD(IntlBidi, getReordered) {
 		return;
 	}
 
-	// HERE IT CRASHES WHEN RUNNING IntlBidi_getReordered_varian.phpt (not enough memory allocated for the string).
+	// HERE IT CRASHES WHEN RUNNING IntlBidi_getReordered_variant.phpt (not enough memory allocated for the string).
 	error = U_ZERO_ERROR;
 	ret = intl_convert_utf16_to_utf8(utext, utext_len, &error);
 	efree(utext);
@@ -853,6 +857,16 @@ static PHP_METHOD(IntlBidi, getReordered) {
 }
 /* }}} */
 
+// TODO: leave this in ??? this is a new feature.
+/* {{{ proto int IntlBidi::getLength() */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getlength_arginfo, ZEND_RETURN_VALUE, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+static PHP_METHOD(IntlBidi, getLength) {
+	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
+	RETURN_LONG(ubidi_getLength(objval->bidi));
+}
+
 static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, __construct, bidi_ctor_arginfo, ZEND_ACC_CTOR | ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, setInverse, bidi_setinverse_arginfo, ZEND_ACC_PUBLIC)
@@ -863,6 +877,7 @@ static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, getReorderingMode, bidi_getreordermode_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, setReorderingOptions, bidi_setreorderopts_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getReorderingOptions, bidi_getreorderopts_arginfo, ZEND_ACC_PUBLIC)
+	PHP_ME(IntlBidi, getLength, bidi_getlength_arginfo, ZEND_ACC_PUBLIC)
 #if ((U_ICU_VERSION_MAJOR_NUM * 10) + U_ICU_VERSION_MINOR_NUM) >= 48
 	PHP_ME(IntlBidi, setContext, bidi_setctx_arginfo, ZEND_ACC_PUBLIC)
 #endif
