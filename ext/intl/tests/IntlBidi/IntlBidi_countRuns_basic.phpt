@@ -1,8 +1,7 @@
 --TEST--
 Test for IntlBidi countRuns
 --CREDITS--
-Timo Scholz
-<timo.scholz@setasign.com>
+Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
 <?php if ( !extension_loaded('mbstring')) print 'skip'; ?>
@@ -25,7 +24,7 @@ Timo Scholz
 include 'IntlBidi_ut_common.inc';
 
 function doTest($string) {
-  $bidi = new IntlBidi();
+  $bidi = new \IntlBidi();
 
   $bidi->setPara($string, 0);
 
