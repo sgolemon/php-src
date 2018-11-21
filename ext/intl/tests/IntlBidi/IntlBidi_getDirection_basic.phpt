@@ -1,6 +1,5 @@
 --TEST--
-Test for IntlBidi countParagraphs
-This currently fails, i still need to check if the test has the wrong implementation or if Bidi is giving faulty results.
+Test for IntlBidi getDirection
 --CREDITS--
 Timo Scholz
 <timo.scholz@setasign.com>
