@@ -3,8 +3,8 @@ Regression test for doing transformations in context.
 --CREDITS--
 Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
-<?php if ( !extension_loaded('intl') ) print 'skip'; ?>
-<?php if ( !extension_loaded('mbstring')) print 'skip'; ?>
+<?php if (!extension_loaded('intl')) print 'skip'; ?>
+<?php if (!extension_loaded('mbstring')) print 'skip'; ?>
 --FILE--
 <?php
 /**

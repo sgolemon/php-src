@@ -4,7 +4,7 @@ Test for IntlBidi countRuns
 Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
-<?php if ( !extension_loaded('mbstring')) print 'skip'; ?>
+<?php if (!extension_loaded('mbstring')) print 'skip'; ?>
 --FILE--
 <?php
 /**
