@@ -362,11 +362,6 @@ static PHP_METHOD(IntlBidi, setLine) {
 	php_intl_bidi_object *objval, *lineval;
 	UErrorCode error;
 
-	zval retval;
-	zend_function * constructor;
-	zend_fcall_info fci;
-	zend_fcall_info_cache fcc;
-
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_LONG(start)
 		Z_PARAM_LONG(limit)
@@ -374,23 +369,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 
 
 	object_init_ex(return_value, php_intl_bidi_ce);
-
-	constructor = Z_OBJ_HT_P(return_value)->get_constructor(Z_OBJ_P(return_value));
-
-	fci.size = sizeof(fci);
-	ZVAL_UNDEF(&fci.function_name);
-	fci.object = Z_OBJ_P(return_value);
-	fci.retval = &retval;
-	fci.param_count = 0;
-	fci.params = NULL;
-	fci.no_separation = 1;
-
-	fcc.function_handler = constructor;
-	fcc.called_scope = Z_OBJCE_P(return_value);
-	fcc.object = Z_OBJ_P(return_value);
-
-	zend_call_function(&fci, &fcc);
-	zval_ptr_dtor(&retval);
+	php_intl_bidi_invokeConstruction(return_value, 0, 0);;
 
 	//TODO: keep objval alive while lineval is alive or setPara() gets called on lineval.
 	// @see http://icu-project.org/apiref/icu4c/ubidi_8h.html#ac7d96b281cd6ab2d56900bfdc37c808a
