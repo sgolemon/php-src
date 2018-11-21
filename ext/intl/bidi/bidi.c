@@ -404,7 +404,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
 
 	error = U_ZERO_ERROR;
-	ubidi_setLine(objval->bidi, start, limit - 1, lineval->bidi, &error);
+	ubidi_setLine(objval->bidi, start, limit, lineval->bidi, &error);
 	if (U_FAILURE(error)) {
 		THROW_UFAILURE(objval, "setLine", error);
 		goto setLine_cleanup;
@@ -449,7 +449,11 @@ static PHP_METHOD(IntlBidi, getBaseDirection) {
 		goto getBaseDirection_cleanup;
 	}
 
-	RETURN_LONG(ubidi_getBaseDirection(utext, utext_len));
+	zend_long result = ubidi_getBaseDirection(utext, utext_len);
+
+	efree(utext);
+
+	RETVAL_LONG(result);
 
 getBaseDirection_cleanup:
 	if (utext) {
@@ -783,7 +787,10 @@ static PHP_METHOD(IntlBidi, getReordered) {
 		Z_PARAM_LONG(options)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (options & UBIDI_INSERT_LRM_FOR_NUMERIC) {
+	if (
+		(options & UBIDI_INSERT_LRM_FOR_NUMERIC) == UBIDI_INSERT_LRM_FOR_NUMERIC ||
+		(ubidi_getReorderingOptions(objval->bidi) & UBIDI_OPTION_INSERT_MARKS) == UBIDI_OPTION_INSERT_MARKS
+	) {
 		error = U_ZERO_ERROR;
 		utext_len = ubidi_getLength(objval->bidi) + (2 * ubidi_countRuns(objval->bidi, &error));
 		if (U_FAILURE(error)) {
@@ -798,14 +805,13 @@ static PHP_METHOD(IntlBidi, getReordered) {
 
 	utext = safe_emalloc(sizeof(UChar), utext_len, sizeof(UChar));
 	error = U_ZERO_ERROR;
-	utext_len = ubidi_writeReordered(objval->bidi, utext, utext_len + 1, options, &error);
+	utext_len = ubidi_writeReordered(objval->bidi, utext, utext_len, options, &error);
 	if (U_FAILURE(error)) {
 		efree(utext);
 		THROW_UFAILURE(objval, "getReordered", error);
 		return;
 	}
 
-	// HERE IT CRASHES WHEN RUNNING IntlBidi_getReordered_variant.phpt (not enough memory allocated for the string).
 	error = U_ZERO_ERROR;
 	ret = intl_convert_utf16_to_utf8(utext, utext_len, &error);
 	efree(utext);
