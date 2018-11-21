@@ -8,7 +8,19 @@ Timo Scholz
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
 --FILE--
 <?php
-
+/**
+ * © 2016 and later: Unicode, Inc. and others.
+ * License & terms of use: http://www.unicode.org/copyright.html#License
+ *
+ *******************************************************************************
+ *   Copyright (C) 2001-2013, International Business Machines
+ *   Corporation and others.  All Rights Reserved.
+ *******************************************************************************
+ */
+/**
+ * Ported from Java.
+ * Original: https://github.com/unicode-org/icu/blob/778d0a6d1d46faa724ead19613bda84621794b72/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestBidi.java
+ */
 $lineStarts = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 13, 2, 0, 0, -1, -1];
 
 $lineLimits = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 6, 14, 3, 8, 8, -1, -1];

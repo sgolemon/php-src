@@ -21,6 +21,7 @@ Timo Scholz <timo.scholz@setasign.com>
  * Original: https://github.com/unicode-org/icu/blob/master/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestReorder.java
  */
 
+// include helper functions
 include 'IntlBidi_ut_common.inc';
 
 // --- INIT TEST DATA ---
