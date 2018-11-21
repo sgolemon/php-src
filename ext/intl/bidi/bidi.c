@@ -367,7 +367,6 @@ static PHP_METHOD(IntlBidi, setLine) {
 		Z_PARAM_LONG(limit)
 	ZEND_PARSE_PARAMETERS_END();
 
-
 	object_init_ex(return_value, php_intl_bidi_ce);
 	php_intl_bidi_invokeConstruction(return_value, 0, 0);;
 
@@ -376,7 +375,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 	// altough i am not sure about "destroying" or "reusing" (if this is also the case when other functions get called)?
 	// it should be right to return a new istance, insteadof overriding a old one, to prevent circular references.
 	// also setPara should not be callable while an object gets referenced, or the referenced objects need to be reset.
-	// I tried to implement it, but i got stuck on that unset() resets the reference count.
+	// I tried to implement it, but got stuck on collecting the leftovers.
 
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
