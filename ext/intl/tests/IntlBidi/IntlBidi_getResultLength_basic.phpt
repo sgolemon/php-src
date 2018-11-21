@@ -28,16 +28,10 @@ $bidi->setReorderingOptions(IntlBidi::REMOVE_BIDI_CONTROLS);
 
 var_dump($bidi->getResultLength());
 $bidiLine2 = $bidi->setLine(0, 6);
-var_dump($bidi->getResultLength());
 var_dump($bidiLine2->getResultLength());
-
-
-
 ?>
 ==DONE==
 --EXPECT--
 int(14)
-int(14)
-int(5)
-int(14)
+int(6)
 ==DONE==

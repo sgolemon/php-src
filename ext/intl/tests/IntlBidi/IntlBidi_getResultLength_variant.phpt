@@ -29,6 +29,6 @@ unset($bidiLine);
 --EXPECT--
 int(14)
 int(14)
-int(5)
-int(5)
+int(6)
+int(6)
 ==DONE==
