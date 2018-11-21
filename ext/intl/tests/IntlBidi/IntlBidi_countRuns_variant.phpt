@@ -1,8 +1,7 @@
 --TEST--
 Check 1-char runs with RUNS_ONLY
 --CREDITS--
-Timo Scholz
-<timo.scholz@setasign.com>
+Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
 --FILE--

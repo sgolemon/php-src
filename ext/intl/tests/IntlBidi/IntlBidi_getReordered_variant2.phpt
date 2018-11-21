@@ -1,5 +1,5 @@
 --TEST--
-U_ZERO_ERROR error. (IS EMBEDDED IN OTHER TEST, BUT EXTRACTED AND REDUCED FOR SIMPLICITY)
+This tests raised an U_ZERO_ERROR error during implementation.
 --CREDITS--
 Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
@@ -8,7 +8,6 @@ Timo Scholz <timo.scholz@setasign.com>
 <?php
 $bidi = new \IntlBidi();
 $bidi->setPara('', \IntlBidi::DEFAULT_LTR);
-// TODO: this function throws a U_ZERO_ERROR exception.
 var_dump($bidi->getReordered(\IntlBidi::INSERT_LRM_FOR_NUMERIC));
 ?>
 ==DONE==

@@ -1,8 +1,7 @@
 --TEST--
 Test for IntlBidi countParagraphs
 --CREDITS--
-Timo Scholz
-<timo.scholz@setasign.com>
+Timo Scholz <timo.scholz@setasign.com>
 --SKIPIF--
 <?php if (!extension_loaded('intl')) print 'skip'; ?>
 --FILE--

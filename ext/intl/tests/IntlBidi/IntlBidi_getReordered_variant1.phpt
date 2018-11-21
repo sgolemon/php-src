@@ -1,7 +1,7 @@
 --TEST--
-U_BUFFER_OVERFLOW_ERROR error.
+This tests triggered a U_BUFFER_OVERFLOW_ERROR error during implementation.
 --CREDITS--
-Timo Scholz <timo.scholz@setasign.com>
+Jan Slabon <jan.slabon@setasign.com>
 --SKIPIF--
 <?php if ( !extension_loaded('intl')) print 'skip'; ?>
 --FILE--
