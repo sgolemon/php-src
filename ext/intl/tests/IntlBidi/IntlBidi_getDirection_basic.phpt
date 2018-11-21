@@ -1,4 +1,4 @@
-+--TEST--
+--TEST--
 Test for IntlBidi countParagraphs
 This currently fails, i still need to check if the test has the wrong implementation or if Bidi is giving faulty results.
 --CREDITS--
@@ -21,43 +21,34 @@ Timo Scholz
  * Ported from Java.
  * Original: https://github.com/unicode-org/icu/blob/778d0a6d1d46faa724ead19613bda84621794b72/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestBidi.java
  */
-$lineStarts = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 13, 2, 0, 0, -1, -1];
+// https://github.com/unicode-org/icu/blob/778d0a6d1d46faa724ead19613bda84621794b72/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestData.java#L23
+$L = \IntlChar::CHAR_DIRECTION_LEFT_TO_RIGHT;
+$R = \IntlChar::CHAR_DIRECTION_RIGHT_TO_LEFT;
+$EN = \IntlChar::CHAR_DIRECTION_EUROPEAN_NUMBER;
+$ES = \IntlChar::CHAR_DIRECTION_EUROPEAN_NUMBER_SEPARATOR;
+$ET = \IntlChar::CHAR_DIRECTION_EUROPEAN_NUMBER_TERMINATOR;
+$AN = \IntlChar::CHAR_DIRECTION_ARABIC_NUMBER;
+$CS = \IntlChar::CHAR_DIRECTION_COMMON_NUMBER_SEPARATOR;
+$B = \IntlChar::CHAR_DIRECTION_BLOCK_SEPARATOR;
+$S = \IntlChar::CHAR_DIRECTION_SEGMENT_SEPARATOR;
+$WS = \IntlChar::CHAR_DIRECTION_WHITE_SPACE_NEUTRAL;
+$ON = \IntlChar::CHAR_DIRECTION_OTHER_NEUTRAL;
+$LRE = \IntlChar::CHAR_DIRECTION_LEFT_TO_RIGHT_EMBEDDING;
+$LRO = \IntlChar::CHAR_DIRECTION_LEFT_TO_RIGHT_OVERRIDE;
+$AL = \IntlChar::CHAR_DIRECTION_RIGHT_TO_LEFT_ARABIC;
+$RLE = \IntlChar::CHAR_DIRECTION_RIGHT_TO_LEFT_EMBEDDING;
+$RLO = \IntlChar::CHAR_DIRECTION_RIGHT_TO_LEFT_OVERRIDE;
+$PDF = \IntlChar::CHAR_DIRECTION_POP_DIRECTIONAL_FORMAT;
+$NSM = \IntlChar::CHAR_DIRECTION_DIR_NON_SPACING_MARK;
+$BN = \IntlChar::CHAR_DIRECTION_BOUNDARY_NEUTRAL;
+$FSI = \IntlChar::CHAR_DIRECTION_FIRST_STRONG_ISOLATE;
+$LRI = \IntlChar::CHAR_DIRECTION_LEFT_TO_RIGHT_ISOLATE;
+$RLI = \IntlChar::CHAR_DIRECTION_RIGHT_TO_LEFT_ISOLATE;
+$PDI = \IntlChar::CHAR_DIRECTION_POP_DIRECTIONAL_ISOLATE;
 
-$lineLimits = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 6, 14, 3, 8, 8, -1, -1];
+$DEF = \IntlChar::CHAR_DIRECTION_CHAR_DIRECTION_COUNT; // why ever this is 19 in Java
 
-$paraLevels = [
-    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR,
-    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, 64, 64, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_RTL,
-    2, 5, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR,
-    IntlBidi::DEFAULT_LTR, IntlBidi::RTL, IntlBidi::LTR, IntlBidi::RTL, IntlBidi::DEFAULT_LTR
-];
-
-$L = 0;
-$R = 1;
-$EN = 2;
-$ES = 3;
-$ET = 4;
-$AN = 5;
-$CS = 6;
-$B = 7;
-$S = 8;
-$WS = 9;
-$ON = 10;
-$LRE = 11;
-$LRO = 12;
-$AL = 13;
-$RLE = 14;
-$RLO = 15;
-$PDF = 16;
-$NSM = 17;
-$BN = 18;
-$FSI = 19;
-$LRI = 20;
-$RLI = 21;
-$PDI = 22;
-
-$DEF = 19;
-
+// https://github.com/unicode-org/icu/blob/778d0a6d1d46faa724ead19613bda84621794b72/icu4j/main/tests/core/src/com/ibm/icu/dev/test/bidi/TestData.java#L53
 $testDirProps = [
     [$L, $L, $WS, $L, $WS, $EN, $L, $B],
     [$R, $AL, $WS, $R, $AL, $WS, $R],
@@ -121,10 +112,35 @@ $testDirProps = [
     [$L],
 ];
 
+$paraLevels = [
+    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR,
+    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR,
+    IntlBidi::DEFAULT_LTR, 64,                    64,
+    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_RTL,
+    2, 5, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR,
+    IntlBidi::DEFAULT_LTR, IntlBidi::DEFAULT_LTR, IntlBidi::RTL, IntlBidi::LTR, IntlBidi::RTL,
+    IntlBidi::DEFAULT_LTR
+];
+
+$testDirections = [
+    \IntlBidi::LTR, \IntlBidi::RTL, \IntlBidi::LTR, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED,
+    \IntlBidi::RTL, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED,
+    \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::RTL,
+    \IntlBidi::LTR, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::MIXED, \IntlBidi::LTR
+];
+
+$lineStarts = [
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 13,
+    2, 0, 0, -1, -1
+];
+
+$lineLimits = [
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 6, 14,
+    3, 8, 8, -1, -1
+];
 
 function getStringFromDirProps($dirProp)
 {
-
     $charFromDirProp = [
         /* L      R    EN    ES    ET     AN    CS    B    S    WS    ON */
         0x61, 0x5d0, 0x30, 0x2f, 0x25, 0x660, 0x2c, 0xa, 0x9, 0x20, 0x26,
@@ -135,18 +151,16 @@ function getStringFromDirProps($dirProp)
     ];
 
     $buffer = '';
-    foreach ($dirProp as $key => $value) {
-        $buffer .= $charFromDirProp[$value];
+    foreach ($dirProp as $value) {
+        $buffer .= \IntlChar::chr($charFromDirProp[$value]);
     }
 
     return $buffer;
 }
 
-// $charFromDirProp[$ES] = 0x2b;
-
-foreach ($testDirProps as $index => $dirProp) {
+for ($index = 0, $indexMax = count($testDirProps); $index < $indexMax; $index++) {
     $bidi = new \IntlBidi();
-    $bidi->setPara(iconv('UTF-16', 'UTF-8', getStringFromDirProps($dirProp)), $paraLevels[$index]);
+    $bidi->setPara(getStringFromDirProps($testDirProps[$index]), $paraLevels[$index]);
     $lineStart = $lineStarts[$index];
     if ($lineStart === -1) {
         $line = $bidi;
@@ -154,37 +168,31 @@ foreach ($testDirProps as $index => $dirProp) {
         $line = $bidi->setLine($lineStart, $lineLimits[$index]);
     }
 
-    var_dump($line->getDirection());
+    var_dump($line->getDirection() === $testDirections[$index]);
 }
 ?>
 ==DONE==
 --EXPECT--
-int(0)
-int(1)
-int(2)
-int(2)
-int(2)
-int(1)
-int(1)
-int(0)
-int(2)
-int(2)
-int(2)
-int(1)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(2)
-int(1)
-int(0)
-int(2)
-int(2)
-int(2)
-int(0)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 ==DONE==
