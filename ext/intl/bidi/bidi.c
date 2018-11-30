@@ -32,6 +32,7 @@ typedef struct _php_intl_bidi_object {
 	UBiDiLevel *embeddingLevels;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
+	zend_object * parent;
 	zend_object std;
 } php_intl_bidi_object;
 
@@ -368,18 +369,12 @@ static PHP_METHOD(IntlBidi, setLine) {
 	ZEND_PARSE_PARAMETERS_END();
 
 	object_init_ex(return_value, php_intl_bidi_ce);
-	php_intl_bidi_invokeConstruction(return_value, 0, 0);;
-
-	//TODO: keep objval alive while lineval is alive or setPara() gets called on lineval.
-	// @see http://icu-project.org/apiref/icu4c/ubidi_8h.html#ac7d96b281cd6ab2d56900bfdc37c808a
-	// altough i am not sure about "destroying" or "reusing" (if this is also the case when other functions get called)?
-	// it should be right to return a new istance, insteadof overriding a old one, to prevent circular references.
-	// also setPara should not be callable while an object gets referenced, or the referenced objects need to be reset.
-	// I tried to implement it, but got stuck on collecting the leftovers.
-
+	php_intl_bidi_invokeConstruction(return_value, 0, 0);
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
+	lineval->parent = Z_OBJ_P(getThis());
+	GC_ADDREF(lineval->parent);
 
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi, start, limit, lineval->bidi, &error);
@@ -875,7 +870,12 @@ static void bidi_object_dtor(zend_object *obj) {
 	if (objval->epilogue) { efree(objval->epilogue); }
 	if (objval->embeddingLevels) { efree(objval->embeddingLevels); }
 
+	if (objval->parent) {
+		GC_DELREF(objval->parent);
+	}
+
 	intl_error_reset(&(objval->error));
+	zend_object_release(obj);
 }
 
 PHP_MINIT_FUNCTION(intl_bidi) {
