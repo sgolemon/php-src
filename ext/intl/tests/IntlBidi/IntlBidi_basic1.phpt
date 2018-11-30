@@ -56,6 +56,7 @@ for ($testNumber = 0; $testNumber < $nTests; $testNumber++) {
     for ($i = 0; $i < 10; $i++) {
         $levels[$i] = chr($i + 1);
     }
+
     $bidi->setPara($srcUt8, \IntlBidi::DEFAULT_LTR, $levels);
     $result = u8ToPseudo($bidi->getReordered(\IntlBidi::DO_MIRRORING | \IntlBidi::REMOVE_BIDI_CONTROLS));
     var_dump($result);
