@@ -33,9 +33,11 @@ typedef struct _bidi_object {
 	int32_t textLength;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
+	unsigned int childCount;
 } bidi_object;
 
 typedef struct _php_intl_bidi_object {
+	bidi_object * parent;
 	bidi_object * bidi;
 	zend_object std;
 } php_intl_bidi_object;
@@ -46,6 +48,22 @@ static inline php_intl_bidi_object *bidi_object_from_zend_object(zend_object *ob
 
 static inline zend_object *bidi_object_to_zend_object(php_intl_bidi_object *obj) {
 	return ((zend_object*)(obj + 1)) - 1;
+}
+
+static inline void bidi_free_bidi_object(bidi_object * obj) {
+	if (obj != NULL) {
+		obj->childCount--;
+		if (obj->childCount == 0) {
+			if (obj->bidi) { ubidi_close(obj->bidi); }
+			if (obj->prologue) { efree(obj->prologue); }
+			if (obj->text)     { efree(obj->text); }
+			if (obj->epilogue) { efree(obj->epilogue); }
+			if (obj->embeddingLevels) { efree(obj->embeddingLevels); }
+
+			intl_error_reset(&(obj->error));
+			efree(obj);
+		}
+	}
 }
 
 #define THROW_UFAILURE(obj, fname, error) \
@@ -378,8 +396,8 @@ static PHP_METHOD(IntlBidi, setLine) {
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
-	//lineval->parent = Z_OBJ_P(getThis());
-	//GC_ADDREF(lineval->parent);
+	lineval->parent = objval->bidi;
+	objval->bidi->childCount++;
 
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi->bidi, start, limit, lineval->bidi->bidi, &error);
@@ -884,8 +902,8 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 
 	objval = zend_object_alloc(sizeof(php_intl_bidi_object), ce);
 
-	// change this to a nulling 
 	objval->bidi = ecalloc(1, sizeof(bidi_object));
+	objval->bidi->childCount = 1;
 
 	zend_object_std_init(&objval->std, ce);
 	object_properties_init(&objval->std, ce);
@@ -898,15 +916,8 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 
 static void bidi_object_dtor(zend_object *obj) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(obj);
-
-	if (objval->bidi->bidi) { ubidi_close(objval->bidi->bidi); }
-	if (objval->bidi->prologue) { efree(objval->bidi->prologue); }
-	if (objval->bidi->text)     { efree(objval->bidi->text); }
-	if (objval->bidi->epilogue) { efree(objval->bidi->epilogue); }
-	if (objval->bidi->embeddingLevels) { efree(objval->bidi->embeddingLevels); }
-
-	intl_error_reset(&(objval->bidi->error));
-	efree(objval->bidi);
+	bidi_free_bidi_object(objval->bidi);
+	bidi_free_bidi_object(objval->parent);
 }
 
 PHP_MINIT_FUNCTION(intl_bidi) {
