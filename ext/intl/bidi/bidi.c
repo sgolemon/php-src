@@ -50,22 +50,6 @@ static inline zend_object *bidi_object_to_zend_object(php_intl_bidi_object *obj)
 	return ((zend_object*)(obj + 1)) - 1;
 }
 
-static inline void bidi_free_bidi_object(bidi_object * obj) {
-	if (obj != NULL) {
-		obj->childCount--;
-		if (obj->childCount == 0) {
-			if (obj->bidi) { ubidi_close(obj->bidi); }
-			if (obj->prologue) { efree(obj->prologue); }
-			if (obj->text)     { efree(obj->text); }
-			if (obj->epilogue) { efree(obj->epilogue); }
-			if (obj->embeddingLevels) { efree(obj->embeddingLevels); }
-
-			intl_error_reset(&(obj->error));
-			efree(obj);
-		}
-	}
-}
-
 #define THROW_UFAILURE(obj, fname, error) \
 	php_intl_bidi_throw_failure(obj, error, \
 	                       "IntlBidi::" fname "() returned error " ZEND_LONG_FMT ": %s", \
@@ -87,9 +71,12 @@ static inline void php_intl_bidi_throw_failure(bidi_object *obj,
 }
 /* }}} */
 
-static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long maxRunCount, zend_long maxLength) {
+static inline bidi_object * bidi_create_bidi_object(zend_long maxRunCount, zend_long maxLength) {
 	UErrorCode error;
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(instance));
+	bidi_object * obj = ecalloc(1, sizeof(bidi_object));
+
+	obj->childCount = 1;
+	intl_error_init(&(obj->error));
 
 	if (PG(memory_limit) > 0) {
 		if (maxLength == 0) {
@@ -97,17 +84,39 @@ static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long m
 		} else if (maxLength > PG(memory_limit)) {
 			php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
 				"IntlBidi::__construct() given maxLength greater than memory_limit");
-			return;
+			return NULL;
 		}
 	}
 
 	error = U_ZERO_ERROR;
-
-	objval->bidi->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
+	obj->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
 	if (U_FAILURE(error)) {
 		THROW_UFAILURE(NULL, "__construct", error);
-		return;
+		return NULL;
 	}
+
+	return obj;
+}
+
+static inline void bidi_free_bidi_object(bidi_object * obj) {
+	if (obj != NULL) {
+		obj->childCount--;
+		if (obj->childCount == 0) {
+			if (obj->bidi) { ubidi_close(obj->bidi); }
+			if (obj->prologue) { efree(obj->prologue); }
+			if (obj->text)     { efree(obj->text); }
+			if (obj->epilogue) { efree(obj->epilogue); }
+			if (obj->embeddingLevels) { efree(obj->embeddingLevels); }
+
+			intl_error_reset(&(obj->error));
+			efree(obj);
+		}
+	}
+}
+
+static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long maxRunCount, zend_long maxLength) {
+	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(instance));
+	objval->bidi = bidi_create_bidi_object(0, 0);
 }
 
 /* {{{ proto void IntlBidi::__construct([int $maxLength = 0, [int $maxRunCount = 0]]) */
@@ -331,6 +340,14 @@ static PHP_METHOD(IntlBidi, setPara) {
 	UChar *upara = NULL;
 	int32_t upara_len = 0;
 	UErrorCode error;
+
+	if (objval->bidi->childCount > 1) {
+		bidi_free_bidi_object(objval->parent);
+		objval->parent = NULL;
+
+		bidi_free_bidi_object(objval->bidi);
+		objval->bidi = bidi_create_bidi_object(0, 0); // TODO: put the right values here.
+	}
 
 	ZEND_PARSE_PARAMETERS_START(1, 3)
 		Z_PARAM_STR(para)
@@ -902,12 +919,8 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 
 	objval = zend_object_alloc(sizeof(php_intl_bidi_object), ce);
 
-	objval->bidi = ecalloc(1, sizeof(bidi_object));
-	objval->bidi->childCount = 1;
-
 	zend_object_std_init(&objval->std, ce);
 	object_properties_init(&objval->std, ce);
-	intl_error_init(&(objval->bidi->error));
 
 	objval->std.handlers = &bidi_object_handlers;
 
