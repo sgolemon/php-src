@@ -33,7 +33,7 @@ typedef struct _bidi_object {
 	int32_t textLength;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
-	unsigned int childCount;
+	zend_long childCount;
 } bidi_object;
 
 typedef struct _php_intl_bidi_object {
@@ -413,8 +413,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
-	lineval->parent = objval->bidi;
-	objval->bidi->childCount++;
+	(lineval->parent = objval->bidi)->childCount++;
 
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi->bidi, start, limit, lineval->bidi->bidi, &error);
