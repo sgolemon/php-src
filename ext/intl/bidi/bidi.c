@@ -75,9 +75,6 @@ static inline bidi_object * bidi_create_bidi_object(zend_long maxRunCount, zend_
 	UErrorCode error;
 	bidi_object * obj = ecalloc(1, sizeof(bidi_object));
 
-	obj->childCount = 1;
-	intl_error_init(&(obj->error));
-
 	if (PG(memory_limit) > 0) {
 		if (maxLength == 0) {
 			maxLength = PG(memory_limit) / 2;
@@ -87,6 +84,9 @@ static inline bidi_object * bidi_create_bidi_object(zend_long maxRunCount, zend_
 			return NULL;
 		}
 	}
+
+	obj->childCount = 1;
+	intl_error_init(&(obj->error));
 
 	error = U_ZERO_ERROR;
 	obj->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
@@ -346,7 +346,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 		objval->parent = NULL;
 
 		bidi_free_bidi_object(objval->bidi);
-		objval->bidi = bidi_create_bidi_object(0, 0); // TODO: put the right values here.
+		objval->bidi = bidi_create_bidi_object(0, 0);
 	}
 
 	ZEND_PARSE_PARAMETERS_START(1, 3)
@@ -449,8 +449,6 @@ static PHP_METHOD(IntlBidi, getBaseDirection) {
 	UChar *utext = NULL;
 	int32_t utext_len = 0;
 	UErrorCode error;
-
-	// TODO: maybe make this static.
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(text)
@@ -848,29 +846,6 @@ static PHP_METHOD(IntlBidi, getLength) {
 }
 /* }}} */
 
-/* {{{ proto string IntlBidi::getText() */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_gettext_arginfo, ZEND_RETURN_VALUE, 0, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-static PHP_METHOD(IntlBidi, getText) {
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	zend_string * str;
-	UErrorCode error;
-
-	error = U_ZERO_ERROR;
-	str = intl_convert_utf16_to_utf8(objval->bidi->text, objval->bidi->textLength, &error);
-
-	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval->bidi, "getText", error);
-		efree(str);
-		return;
-	}
-
-
-
-	RETURN_STR(str);
-}
-/* }}} */
-
 static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, __construct, bidi_ctor_arginfo, ZEND_ACC_CTOR | ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, setInverse, bidi_setinverse_arginfo, ZEND_ACC_PUBLIC)
@@ -905,7 +880,6 @@ static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, getProcessedLength, bidi_getprocessedlen_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getResultLength, bidi_getresultlen_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getReordered, bidi_getreordered_arginfo, ZEND_ACC_PUBLIC)
-	PHP_ME(IntlBidi, getText, bidi_gettext_arginfo, ZEND_ACC_PUBLIC)
 
 	PHP_FE_END
 };
