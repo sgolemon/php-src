@@ -42,7 +42,7 @@ $newBidi3 = $newBidi2->setLine(0, $newBidi2->getResultLength());
 
 // $bidi->setPara('', \Intlbidi::DEFAULT_LTR);
 
- $result = u8ToPseudo($newBidi3->getReordered(\IntlBidi::DO_MIRRORING));
+$result = u8ToPseudo($newBidi3->getReordered(\IntlBidi::DO_MIRRORING));
 var_dump($result);
 ?>
 ==DONE==
