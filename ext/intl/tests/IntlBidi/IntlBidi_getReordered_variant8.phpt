@@ -26,57 +26,26 @@ include 'IntlBidi_ut_common.inc';
 
 // --- INIT TEST DATA ---
 
-$logicalOrder = [
-    'del(KC)add(K.C.&)',
-    'del(QDVT) add(BVDL)',
-    'del(PQ)add(R.S.)T)U.&',
-    'del(LV)add(L.V.) L.V.&',
-    'day  0  R  DPDHRVR dayabbr',
-    'day  1  H  DPHPDHDA dayabbr',
-    'day  2   L  DPBLENDA dayabbr',
-    'day  3  J  DPJQVM  dayabbr',
-    'day  4   I  DPIQNF    dayabbr',
-    'day  5  M  DPMEG  dayabbr',
-    'helloDPMEG',
-    'hello WXY'
-];
+$logicalOrder = 'del(KC)add(K.C.&)';
+
 
 // --- RUN TEST ---
 
-$nTests = \count($logicalOrder);
-for ($testNumber = 0; $testNumber < $nTests; $testNumber++) {
+// prepare the source.
+$srcUt8 = pseudoToU8($logicalOrder);
 
-    // prepare the source.
-    $src = $logicalOrder[$testNumber];
-    $srcUt8 = pseudoToU8($src);
+ $bidi = new \IntlBidi();
+$bidi->setPara($srcUt8, \IntlBidi::DEFAULT_LTR);
+$newBidi = $bidi->setLine(0, $bidi->getResultLength());
+$newBidi2 = $newBidi->setLine(0, $newBidi->getResultLength());
+$newBidi3 = $newBidi2->setLine(0, $newBidi2->getResultLength());
 
-    $bidi = new \IntlBidi();
-    $bidi->setPara($srcUt8, \IntlBidi::DEFAULT_LTR);
-    $newBidi = $bidi->setLine(0, $bidi->getResultLength());
+// $bidi->setPara('', \Intlbidi::DEFAULT_LTR);
 
-    for ($i = 0; $i <= 10; $i++) {
-        $newBidi = $newBidi->setLine(0, $newBidi->getResultLength());
-    }
-
-    $bidi->setPara('', \Intlbidi::DEFAULT_LTR);
-
-    
-    $result = u8ToPseudo($newBidi->getReordered(\IntlBidi::DO_MIRRORING));
-    var_dump($result);
-}
+ $result = u8ToPseudo($newBidi3->getReordered(\IntlBidi::DO_MIRRORING));
+var_dump($result);
 ?>
 ==DONE==
 --EXPECT--
 string(17) "del(CK)add(&.C.K)"
-string(19) "del(TVDQ) add(LDVB)"
-string(21) "del(QP)add(S.R.)&.U(T"
-string(22) "del(VL)add(V.L.) &.V.L"
-string(26) "day  0  RVRHDPD  R dayabbr"
-string(27) "day  1  ADHDPHPD  H dayabbr"
-string(28) "day  2   ADNELBPD  L dayabbr"
-string(26) "day  3  MVQJPD  J  dayabbr"
-string(29) "day  4   FNQIPD  I    dayabbr"
-string(25) "day  5  GEMPD  M  dayabbr"
-string(10) "helloGEMPD"
-string(9) "hello YXW"
 ==DONE==
