@@ -109,10 +109,11 @@ static inline void bidi_free_bidi_object(bidi_object * obj) {
 			if (obj->embeddingLevels) { efree(obj->embeddingLevels); }
 
 			intl_error_reset(&(obj->error));
-			efree(obj);
 
 			bidi_free_bidi_object(obj->parent);
 			obj->parent = NULL;
+
+			efree(obj);
 		}
 	}
 }
