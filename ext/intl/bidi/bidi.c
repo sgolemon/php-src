@@ -34,10 +34,10 @@ typedef struct _bidi_object {
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
 	zend_long childCount;
+	struct _bidi_object * parent;
 } bidi_object;
 
 typedef struct _php_intl_bidi_object {
-	bidi_object * parent;
 	bidi_object * bidi;
 	zend_object std;
 } php_intl_bidi_object;
@@ -110,6 +110,9 @@ static inline void bidi_free_bidi_object(bidi_object * obj) {
 
 			intl_error_reset(&(obj->error));
 			efree(obj);
+
+			bidi_free_bidi_object(obj->parent);
+			obj->parent = NULL;
 		}
 	}
 }
@@ -342,9 +345,6 @@ static PHP_METHOD(IntlBidi, setPara) {
 	UErrorCode error;
 
 	if (objval->bidi->childCount > 1) {
-		bidi_free_bidi_object(objval->parent);
-		objval->parent = NULL;
-
 		bidi_free_bidi_object(objval->bidi);
 		objval->bidi = bidi_create_bidi_object(0, 0);
 	}
@@ -413,7 +413,7 @@ static PHP_METHOD(IntlBidi, setLine) {
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
-	(lineval->parent = objval->bidi)->childCount++;
+	(lineval->bidi->parent = objval->bidi)->childCount++;
 
 	error = U_ZERO_ERROR;
 	ubidi_setLine(objval->bidi->bidi, start, limit, lineval->bidi->bidi, &error);
@@ -903,7 +903,6 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 static void bidi_object_dtor(zend_object *obj) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(obj);
 	bidi_free_bidi_object(objval->bidi);
-	bidi_free_bidi_object(objval->parent);
 }
 
 PHP_MINIT_FUNCTION(intl_bidi) {
