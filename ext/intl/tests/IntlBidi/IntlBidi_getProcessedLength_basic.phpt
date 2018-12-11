@@ -15,7 +15,6 @@ $bidi = new \IntlBidi();
 
 $bidi->setPara('testen');
 var_dump($bidi->getProcessedLength()); // 6
-// 'del(KC)add(K.C.&)'
 
 $string = pseudoToU8('del(KC)');
 $bidi->setPara($string);
