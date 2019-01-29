@@ -119,8 +119,20 @@ static inline void bidi_free_bidi_object(bidi_object * obj) {
 }
 
 static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long maxRunCount, zend_long maxLength) {
+	if (maxRunCount < 0) {
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+			"IntlBidi::__construct() expects maxRunCount to be a non-negative value");
+		return;
+	}
+
+	if (maxLength < 0) {
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+			"IntlBidi::__construct() expects maxLength to be a non-negative value");
+		return;
+	}
+
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(instance));
-	objval->bidi = bidi_create_bidi_object(0, 0);
+	objval->bidi = bidi_create_bidi_object(maxRunCount, maxLength);
 }
 
 /* {{{ proto void IntlBidi::__construct([int $maxLength = 0, [int $maxRunCount = 0]]) */
@@ -136,18 +148,6 @@ static PHP_METHOD(IntlBidi, __construct) {
 		Z_PARAM_LONG(maxLength)
 		Z_PARAM_LONG(maxRunCount)
 	ZEND_PARSE_PARAMETERS_END();
-
-	if (maxRunCount < 0) {
-		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlBidi::__construct() expects maxRunCount to be a non-negative value");
-		return;
-	}
-
-	if (maxLength < 0) {
-		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlBidi::__construct() expects maxLength to be a non-negative value");
-		return;
-	}
 
 	php_intl_bidi_invokeConstruction(getThis(), maxLength, maxRunCount);
 }
@@ -264,8 +264,8 @@ static PHP_METHOD(IntlBidi, getReorderingOptions) {
 #if ((U_ICU_VERSION_MAJOR_NUM * 10) + U_ICU_VERSION_MINOR_NUM) >= 48
 /* {{{ proto self IntlBidi::setContext([string $prologue = ''[, string $epilogue = '']]) */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setctx_arginfo, ZEND_RETURN_VALUE, 0, IS_OBJECT, 0)
-	ZEND_ARG_TYPE_INFO(0, prologue, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, epilogue, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, prologue, IS_STRING, 1)
+	ZEND_ARG_TYPE_INFO(0, epilogue, IS_STRING, 1)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setContext) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
@@ -275,8 +275,8 @@ static PHP_METHOD(IntlBidi, setContext) {
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_STR_EX(prologue, 0, 0)
-		Z_PARAM_STR_EX(epilogue, 0, 0)
+		Z_PARAM_STR_EX(prologue, 1, 0)
+		Z_PARAM_STR_EX(epilogue, 1, 0)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (prologue && ZSTR_LEN(prologue)) {
@@ -354,7 +354,7 @@ static PHP_METHOD(IntlBidi, setPara) {
 		Z_PARAM_STR(para)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(paraLevel)
-		Z_PARAM_STR_EX(embeddingLevels, 0, 0)
+		Z_PARAM_STR_EX(embeddingLevels, 1, 0)
 	ZEND_PARSE_PARAMETERS_END();
 
 	error = U_ZERO_ERROR;
