@@ -30,6 +30,7 @@ static zend_object_handlers bidi_object_handlers;
 typedef struct _bidi_object {
 	UBiDi *bidi;
 	UBiDiLevel *embeddingLevels;
+	int32_t start, limit;
 	int32_t textLength;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
@@ -413,11 +414,29 @@ static PHP_METHOD(IntlBidi, setLine) {
 	php_intl_bidi_invokeConstruction(return_value, 0, 0);
 
 	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	bidi_object * root = objval->bidi;
 	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
 	(lineval->bidi->parent = objval->bidi)->childCount++;
 
+	if (root->parent != NULL) {
+		if (start + limit > root->limit) {
+			THROW_UFAILURE(objval->bidi, "setLine", error);
+			goto setLine_cleanup;
+		}
+
+		start += root->start;
+		
+		while (root->parent != NULL) {
+			root = root->parent;
+		}
+	}
+
+	lineval->bidi->start = start;
+	lineval->bidi->limit = limit;
+
 	error = U_ZERO_ERROR;
-	ubidi_setLine(objval->bidi->bidi, start, limit, lineval->bidi->bidi, &error);
+
+	ubidi_setLine(root->bidi, start, limit, lineval->bidi->bidi, &error);
 	if (U_FAILURE(error)) {
 		THROW_UFAILURE(objval->bidi, "setLine", error);
 		goto setLine_cleanup;
