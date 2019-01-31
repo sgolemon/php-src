@@ -27,10 +27,19 @@
 zend_class_entry *php_intl_bidi_ce;
 static zend_object_handlers bidi_object_handlers;
 
-typedef struct _php_intl_bidi_object {
+typedef struct _bidi_object {
 	UBiDi *bidi;
+	UBiDiLevel *embeddingLevels;
+	int32_t start, limit;
+	int32_t textLength;
 	UChar *prologue, *text, *epilogue;
 	intl_error error;
+	zend_long childCount;
+	struct _bidi_object * parent;
+} bidi_object;
+
+typedef struct _php_intl_bidi_object {
+	bidi_object * bidi;
 	zend_object std;
 } php_intl_bidi_object;
 
@@ -43,14 +52,14 @@ static inline zend_object *bidi_object_to_zend_object(php_intl_bidi_object *obj)
 }
 
 #define THROW_UFAILURE(obj, fname, error) \
-	php_bidi_throw_failure(obj, error, \
+	php_intl_bidi_throw_failure(obj, error, \
 	                       "IntlBidi::" fname "() returned error " ZEND_LONG_FMT ": %s", \
 	                       (zend_long)error, u_errorName(error))
 
-/* {{{ php_bidi_throw_failure */
-static inline void php_bidi_throw_failure(php_intl_bidi_object *objval,
+/* {{{ php_intl_bidi_throw_failure */
+static inline void php_intl_bidi_throw_failure(bidi_object *obj,
                                           UErrorCode error, const char *format, ...) {
-	intl_error *err = objval ? &(objval->error) : NULL;
+	intl_error *err = obj ? &(obj->error) : NULL;
 	char message[1024];
 	va_list vargs;
 
@@ -63,6 +72,70 @@ static inline void php_bidi_throw_failure(php_intl_bidi_object *objval,
 }
 /* }}} */
 
+static inline bidi_object * bidi_create_bidi_object(zend_long maxRunCount, zend_long maxLength) {
+	UErrorCode error;
+	bidi_object * obj = ecalloc(1, sizeof(bidi_object));
+
+	if (PG(memory_limit) > 0) {
+		if (maxLength == 0) {
+			maxLength = PG(memory_limit) / 2;
+		} else if (maxLength > PG(memory_limit)) {
+			php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+				"IntlBidi::__construct() given maxLength greater than memory_limit");
+			return NULL;
+		}
+	}
+
+	obj->childCount = 1;
+	intl_error_init(&(obj->error));
+
+	error = U_ZERO_ERROR;
+	obj->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
+	if (U_FAILURE(error)) {
+		THROW_UFAILURE(NULL, "__construct", error);
+		return NULL;
+	}
+
+	return obj;
+}
+
+static inline void bidi_free_bidi_object(bidi_object * obj) {
+	if (obj != NULL) {
+		obj->childCount--;
+		if (obj->childCount == 0) {
+			if (obj->bidi) { ubidi_close(obj->bidi); }
+			if (obj->prologue) { efree(obj->prologue); }
+			if (obj->text)     { efree(obj->text); }
+			if (obj->epilogue) { efree(obj->epilogue); }
+			if (obj->embeddingLevels) { efree(obj->embeddingLevels); }
+
+			intl_error_reset(&(obj->error));
+
+			bidi_free_bidi_object(obj->parent);
+			obj->parent = NULL;
+
+			efree(obj);
+		}
+	}
+}
+
+static inline void php_intl_bidi_invokeConstruction(zval * instance, zend_long maxRunCount, zend_long maxLength) {
+	if (maxRunCount < 0) {
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+			"IntlBidi::__construct() expects maxRunCount to be a non-negative value");
+		return;
+	}
+
+	if (maxLength < 0) {
+		php_intl_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
+			"IntlBidi::__construct() expects maxLength to be a non-negative value");
+		return;
+	}
+
+	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(instance));
+	objval->bidi = bidi_create_bidi_object(maxRunCount, maxLength);
+}
+
 /* {{{ proto void IntlBidi::__construct([int $maxLength = 0, [int $maxRunCount = 0]]) */
 ZEND_BEGIN_ARG_INFO_EX(bidi_ctor_arginfo, 0, ZEND_RETURN_VALUE, 0)
 	ZEND_ARG_TYPE_INFO(0, maxLength, IS_LONG, 0)
@@ -70,41 +143,14 @@ ZEND_BEGIN_ARG_INFO_EX(bidi_ctor_arginfo, 0, ZEND_RETURN_VALUE, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, __construct) {
 	zend_long maxLength = 0, maxRunCount = 0;
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "|ll", &maxLength, &maxRunCount) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(0, 2)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(maxLength)
+		Z_PARAM_LONG(maxRunCount)
+	ZEND_PARSE_PARAMETERS_END();
 
-	if (maxRunCount < 0) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlBidi::__construct() expects maxRunCount to be a non-negative value");
-		return;
-	}
-
-	if (maxLength < 0) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlBidi::__construct() expects maxLength to be a non-negative value");
-		return;
-	}
-
-	if (PG(memory_limit) > 0) {
-		if (maxLength == 0) {
-			maxLength = PG(memory_limit) / 2;
-		} else if (maxLength > PG(memory_limit)) {
-			php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-				"IntlBidi::__construct() given maxLength greater than memory_limit");
-			return;
-		}
-	}
-
-	error = U_ZERO_ERROR;
-	objval->bidi = ubidi_openSized(maxLength, maxRunCount, &error);
-	if (U_FAILURE(error)) {
-		THROW_UFAILURE(NULL, "__construct", error);
-		return;
-	}
+	php_intl_bidi_invokeConstruction(getThis(), maxLength, maxRunCount);
 }
 /* }}} */
 
@@ -116,11 +162,11 @@ static PHP_METHOD(IntlBidi, setInverse) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_bool inverse;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "b", &inverse) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_BOOL(inverse)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_setInverse(objval->bidi, (UBool)inverse);
+	ubidi_setInverse(objval->bidi->bidi, (UBool)inverse);
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
@@ -131,7 +177,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, isInverse) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_isInverse(objval->bidi));
+	RETURN_BOOL(ubidi_isInverse(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -143,11 +189,11 @@ static PHP_METHOD(IntlBidi, orderParagraphsLTR) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_bool ltr;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "b", &ltr) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_BOOL(ltr)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_orderParagraphsLTR(objval->bidi, (UBool)ltr);
+	ubidi_orderParagraphsLTR(objval->bidi->bidi, (UBool)ltr);
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
@@ -158,7 +204,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, isOrderParagraphsLTR) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_isOrderParagraphsLTR(objval->bidi));
+	RETURN_BOOL(ubidi_isOrderParagraphsLTR(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -170,11 +216,11 @@ static PHP_METHOD(IntlBidi, setReorderingMode) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_long mode;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &mode) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(mode)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_setReorderingMode(objval->bidi, (UBiDiReorderingMode)mode);
+	ubidi_setReorderingMode(objval->bidi->bidi, (UBiDiReorderingMode)mode);
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
@@ -185,7 +231,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getReorderingMode) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_getReorderingMode(objval->bidi));
+	RETURN_LONG(ubidi_getReorderingMode(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -197,11 +243,11 @@ static PHP_METHOD(IntlBidi, setReorderingOptions) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_long opts;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &opts) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(opts)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_setReorderingOptions(objval->bidi, (UBiDiReorderingOption)opts);
+	ubidi_setReorderingOptions(objval->bidi->bidi, (UBiDiReorderingOption)opts);
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
@@ -212,15 +258,15 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getReorderingOptions) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_BOOL(ubidi_getReorderingOptions(objval->bidi));
+	RETURN_LONG(ubidi_getReorderingOptions(objval->bidi->bidi));
 }
 /* }}} */
 
 #if ((U_ICU_VERSION_MAJOR_NUM * 10) + U_ICU_VERSION_MINOR_NUM) >= 48
 /* {{{ proto self IntlBidi::setContext([string $prologue = ''[, string $epilogue = '']]) */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setctx_arginfo, ZEND_RETURN_VALUE, 0, IS_OBJECT, 0)
-	ZEND_ARG_TYPE_INFO(0, prologue, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, epilogue, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, prologue, IS_STRING, 1)
+	ZEND_ARG_TYPE_INFO(0, epilogue, IS_STRING, 1)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setContext) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
@@ -228,15 +274,17 @@ static PHP_METHOD(IntlBidi, setContext) {
 	UChar *uprologue = NULL, *uepilogue = NULL;
 	int32_t uprologue_len = 0, uepilogue_len = 0;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "|S!S!", &prologue, &epilogue) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(0, 2)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_STR_EX(prologue, 1, 0)
+		Z_PARAM_STR_EX(epilogue, 1, 0)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (prologue && ZSTR_LEN(prologue)) {
 		UErrorCode error = U_ZERO_ERROR;
 		intl_convert_utf8_to_utf16(&uprologue, &uprologue_len, ZSTR_VAL(prologue), ZSTR_LEN(prologue), &error);
 		if (U_FAILURE(error)) {
-			THROW_UFAILURE(objval, "setContext", error);
+			THROW_UFAILURE(objval->bidi, "setContext", error);
 			goto setContext_cleanup;
 		}
 	}
@@ -245,30 +293,30 @@ static PHP_METHOD(IntlBidi, setContext) {
 		UErrorCode error = U_ZERO_ERROR;
 		intl_convert_utf8_to_utf16(&uepilogue, &uepilogue_len, ZSTR_VAL(epilogue), ZSTR_LEN(epilogue), &error);
 		if (U_FAILURE(error)) {
-			THROW_UFAILURE(objval, "setContext", error);
+			THROW_UFAILURE(objval->bidi, "setContext", error);
 			goto setContext_cleanup;
 		}
 	}
 
 	{
 		UErrorCode error = U_ZERO_ERROR;
-		ubidi_setContext(objval->bidi, uprologue, uprologue_len, uepilogue, uepilogue_len, &error);
+		ubidi_setContext(objval->bidi->bidi, uprologue, uprologue_len, uepilogue, uepilogue_len, &error);
 		if (U_FAILURE(error)) {
-			THROW_UFAILURE(objval, "setContext", error);
+			THROW_UFAILURE(objval->bidi, "setContext", error);
 			goto setContext_cleanup;
 		}
 	}
 
 	/* Preserve prologue/epilogue as set for later use */
-	if (objval->prologue) {
-		efree(objval->prologue);
+	if (objval->bidi->prologue) {
+		efree(objval->bidi->prologue);
 	}
-	objval->prologue = uprologue;
+	objval->bidi->prologue = uprologue;
 
-	if (objval->epilogue) {
-		efree(objval->epilogue);
+	if (objval->bidi->epilogue) {
+		efree(objval->bidi->epilogue);
 	}
-	objval->epilogue = uepilogue;
+	objval->bidi->epilogue = uepilogue;
 
 	RETURN_ZVAL(getThis(), 1, 0);
 
@@ -284,43 +332,60 @@ setContext_cleanup:
 /* }}} */
 #endif /* ICU >= 4.8 */
 
-/* {{{ proto self IntlBidi::setPara(string $paragraph[, int $paraLevel = IntlBidi::DEFAULT_LTR]) */
+/* {{{ proto self IntlBidi::setPara(string $paragraph[, int $paraLevel = IntlBidi::DEFAULT_LTR[, string $embeddingLevels]]) */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setpara_arginfo, ZEND_RETURN_VALUE, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, paragraph, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, paraLevel, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, embeddingLevels, IS_STRING, 1)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setPara) {
+	zend_string *para, *embeddingLevels = NULL;
+	zend_long paraLevel = UBIDI_DEFAULT_LTR;
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	zend_string *para;
 	UChar *upara = NULL;
 	int32_t upara_len = 0;
-	zend_long paraLevel = UBIDI_DEFAULT_LTR;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "S|l", &para, &paraLevel) == FAILURE) {
-		return;
+	if (objval->bidi->childCount > 1) {
+		bidi_free_bidi_object(objval->bidi);
+		objval->bidi = bidi_create_bidi_object(0, 0);
 	}
 
+	ZEND_PARSE_PARAMETERS_START(1, 3)
+		Z_PARAM_STR(para)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(paraLevel)
+		Z_PARAM_STR_EX(embeddingLevels, 1, 0)
+	ZEND_PARSE_PARAMETERS_END();
+
 	error = U_ZERO_ERROR;
+	objval->bidi->textLength = ZSTR_LEN(para);
 	intl_convert_utf8_to_utf16(&upara, &upara_len, ZSTR_VAL(para), ZSTR_LEN(para), &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "setPara", error);
+		THROW_UFAILURE(objval->bidi, "setPara", error);
 		goto setPara_cleanup;
 	}
 
+	if (embeddingLevels != NULL && ZSTR_LEN(embeddingLevels) > 0) {
+		objval->bidi->embeddingLevels = (UBiDiLevel*)erealloc(objval->bidi->embeddingLevels, ZSTR_LEN(embeddingLevels));
+		memcpy(objval->bidi->embeddingLevels, ZSTR_VAL(embeddingLevels), ZSTR_LEN(embeddingLevels));
+	} else {
+		efree(objval->bidi->embeddingLevels);
+		objval->bidi->embeddingLevels = NULL;
+	}
+
 	error = U_ZERO_ERROR;
-	/* TODO: embeddingLevels */
-	ubidi_setPara(objval->bidi, upara, upara_len, (UBiDiLevel)paraLevel, NULL, &error);
+	ubidi_setPara(objval->bidi->bidi, upara, upara_len, (UBiDiLevel)paraLevel, objval->bidi->embeddingLevels, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "setPara", error);
+		THROW_UFAILURE(objval->bidi, "setPara", error);
 		goto setPara_cleanup;
 	}
 
 	/* Most recently set paragraph must be retained by us. */
-	if (objval->text) {
-		efree(objval->text);
+	if (objval->bidi->text) {
+		efree(objval->bidi->text);
 	}
-	objval->text = upara;
+	objval->bidi->text = upara;
 	RETURN_ZVAL(getThis(), 1, 0);
 
 setPara_cleanup:
@@ -330,32 +395,58 @@ setPara_cleanup:
 }
 /* }}} */
 
-/* {{{ proto self IntlBidi::setLine(int $tart, int $limit, IntlBidi $line) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setline_arginfo, ZEND_RETURN_VALUE, 3, IS_OBJECT, 0)
+/* {{{ proto IntlBidi IntlBidi::setLine(int $start, int $limit) */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_setline_arginfo, ZEND_RETURN_VALUE, 2, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, start, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, limit, IS_LONG, 0)
-	ZEND_ARG_TYPE_INFO(0, line, IS_OBJECT, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, setLine) {
 	zend_long start, limit;
-	zend_object *zline;
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	php_intl_bidi_object *lineval;
+	php_intl_bidi_object *objval, *lineval;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "llO", &start, &limit, &zline, php_intl_bidi_ce) == FAILURE) {
-		return;
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_LONG(start)
+		Z_PARAM_LONG(limit)
+	ZEND_PARSE_PARAMETERS_END();
+
+	object_init_ex(return_value, php_intl_bidi_ce);
+	php_intl_bidi_invokeConstruction(return_value, 0, 0);
+
+	objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	bidi_object * root = objval->bidi;
+	lineval = bidi_object_from_zend_object(Z_OBJ_P(return_value));
+	(lineval->bidi->parent = objval->bidi)->childCount++;
+
+	if (root->parent != NULL) {
+		if (start + limit > root->limit) {
+			THROW_UFAILURE(objval->bidi, "setLine", error);
+			goto setLine_cleanup;
+		}
+
+		start += root->start;
+		
+		while (root->parent != NULL) {
+			root = root->parent;
+		}
 	}
 
-	lineval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	lineval->bidi->start = start;
+	lineval->bidi->limit = limit;
+
 	error = U_ZERO_ERROR;
-	ubidi_setLine(objval->bidi, start, limit, lineval->bidi, &error);
+
+	ubidi_setLine(root->bidi, start, limit, lineval->bidi->bidi, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "setLine", error);
-		return;
+		THROW_UFAILURE(objval->bidi, "setLine", error);
+		goto setLine_cleanup;
 	}
 
-	RETURN_ZVAL(getThis(), 1, 0);
+	RETURN_ZVAL(return_value, 0, 0);
+setLine_cleanup:
+	if (return_value) {
+		zval_ptr_dtor(return_value);
+	}
 }
 /* }}} */
 
@@ -365,23 +456,23 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getDirection) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_LONG(ubidi_getDirection(objval->bidi));
+	RETURN_LONG(ubidi_getDirection(objval->bidi->bidi));
 }
 /* }}} */
 
 /* {{{ proto int IntlBidi::getBaseDirection(string $text) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getbasedir_arginfo, ZEND_RETURN_VALUE, 0, IS_LONG, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getbasedir_arginfo, ZEND_RETURN_VALUE, 1, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getBaseDirection) {
 	zend_string *text;
 	UChar *utext = NULL;
-	int32_t utext_len;
+	int32_t utext_len = 0;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "S", &text) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(text)
+	ZEND_PARSE_PARAMETERS_END();
 
 	error = U_ZERO_ERROR;
 	intl_convert_utf8_to_utf16(&utext, &utext_len, ZSTR_VAL(text), ZSTR_LEN(text), &error);
@@ -390,7 +481,11 @@ static PHP_METHOD(IntlBidi, getBaseDirection) {
 		goto getBaseDirection_cleanup;
 	}
 
-	RETURN_LONG(ubidi_getBaseDirection(utext, utext_len));
+	zend_long result = ubidi_getBaseDirection(utext, utext_len);
+
+	efree(utext);
+
+	RETVAL_LONG(result);
 
 getBaseDirection_cleanup:
 	if (utext) {
@@ -405,7 +500,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getParaLevel) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_LONG(ubidi_getParaLevel(objval->bidi));
+	RETURN_LONG(ubidi_getParaLevel(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -415,7 +510,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, countParagraphs) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_LONG(ubidi_countParagraphs(objval->bidi));
+	RETURN_LONG(ubidi_countParagraphs(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -430,13 +525,13 @@ static PHP_METHOD(IntlBidi, getParagraph) {
 	UBiDiLevel level = UBIDI_MAX_EXPLICIT_LEVEL;
 	UErrorCode error = U_ZERO_ERROR;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &pos) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(pos)
+	ZEND_PARSE_PARAMETERS_END();
 
-	idx = ubidi_getParagraph(objval->bidi, pos, &start, &limit, &level, &error);
+	idx = ubidi_getParagraph(objval->bidi->bidi, pos, &start, &limit, &level, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getParagraph", error);
+		THROW_UFAILURE(objval->bidi, "getParagraph", error);
 		return;
 	}
 
@@ -459,13 +554,13 @@ static PHP_METHOD(IntlBidi, getParagraphByIndex) {
 	UBiDiLevel level = UBIDI_MAX_EXPLICIT_LEVEL;
 	UErrorCode error = U_ZERO_ERROR;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &idx) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1);
+		Z_PARAM_LONG(idx)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_getParagraphByIndex(objval->bidi, idx, &start, &limit, &level, &error);
+	ubidi_getParagraphByIndex(objval->bidi->bidi, idx, &start, &limit, &level, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getParagraph", error);
+		THROW_UFAILURE(objval->bidi, "getParagraph", error);
 		return;
 	}
 
@@ -485,11 +580,11 @@ static PHP_METHOD(IntlBidi, getLevelAt) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	zend_long pos;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &pos) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(pos)
+	ZEND_PARSE_PARAMETERS_END();
 
-	RETURN_LONG(ubidi_getLevelAt(objval->bidi, pos));
+	RETURN_LONG(ubidi_getLevelAt(objval->bidi->bidi, pos));
 }
 /* }}} */
 
@@ -505,12 +600,12 @@ static PHP_METHOD(IntlBidi, getLevels) {
 
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
 
-	levels = ubidi_getLevels(objval->bidi, &error);
+	levels = ubidi_getLevels(objval->bidi->bidi, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getLevels", error);
+		THROW_UFAILURE(objval->bidi, "getLevels", error);
 		return;
 	}
-	len = ubidi_getProcessedLength(objval->bidi);
+	len = ubidi_getProcessedLength(objval->bidi->bidi);
 	ret = zend_string_alloc(len, 0);
 	memcpy(ZSTR_VAL(ret), levels, len);
 	ZSTR_VAL(ret)[len] = 0;
@@ -529,11 +624,11 @@ static PHP_METHOD(IntlBidi, getLogicalRun) {
 	int32_t limit = 0;
 	UBiDiLevel level = UBIDI_MAX_EXPLICIT_LEVEL;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &pos) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(pos)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ubidi_getLogicalRun(objval->bidi, pos, &limit, &level);
+	ubidi_getLogicalRun(objval->bidi->bidi, pos, &limit, &level);
 
 	array_init(return_value);
 	add_assoc_long(return_value, "limit", limit);
@@ -551,9 +646,9 @@ static PHP_METHOD(IntlBidi, countRuns) {
 
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
 
-	ret = ubidi_countRuns(objval->bidi, &error);
+	ret = ubidi_countRuns(objval->bidi->bidi, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "countRuns", error);
+		THROW_UFAILURE(objval->bidi, "countRuns", error);
 		return;
 	}
 
@@ -571,11 +666,11 @@ static PHP_METHOD(IntlBidi, getVisualRun) {
 	int32_t start = 0, length = 0;
 	UBiDiDirection dir;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &idx) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(idx)
+	ZEND_PARSE_PARAMETERS_END();
 
-	dir = ubidi_getVisualRun(objval->bidi, idx, &start, &length);
+	dir = ubidi_getVisualRun(objval->bidi->bidi, idx, &start, &length);
 
 	array_init(return_value);
 	add_assoc_long(return_value, "start", start);
@@ -594,13 +689,13 @@ static PHP_METHOD(IntlBidi, getVisualIndex) {
 	int32_t ret;
 	UErrorCode error = U_ZERO_ERROR;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &idx) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(idx)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ret = ubidi_getVisualIndex(objval->bidi, idx, &error);
+	ret = ubidi_getVisualIndex(objval->bidi->bidi, idx, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getVisualIndex", error);
+		THROW_UFAILURE(objval->bidi, "getVisualIndex", error);
 		return;
 	}
 
@@ -618,13 +713,13 @@ static PHP_METHOD(IntlBidi, getLogicalIndex) {
 	int32_t ret;
 	UErrorCode error = U_ZERO_ERROR;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &idx) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(idx)
+	ZEND_PARSE_PARAMETERS_END();
 
-	ret = ubidi_getLogicalIndex(objval->bidi, idx, &error);
+	ret = ubidi_getLogicalIndex(objval->bidi->bidi, idx, &error);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getLogicalIndex", error);
+		THROW_UFAILURE(objval->bidi, "getLogicalIndex", error);
 		return;
 	}
 
@@ -637,17 +732,17 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getlogicalmap_arginfo, ZEND_RETURN_
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getLogicalMap) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	int32_t len = ubidi_getProcessedLength(objval->bidi), i;
+	int32_t len = ubidi_getProcessedLength(objval->bidi->bidi), i;
 	int32_t *map;
 	UErrorCode error = U_ZERO_ERROR;
 
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
 
 	map = safe_emalloc(sizeof(int32_t), len, 0);
-	ubidi_getLogicalMap(objval->bidi, map, &error);
+	ubidi_getLogicalMap(objval->bidi->bidi, map, &error);
 	if (U_FAILURE(error)) {
 		efree(map);
-		THROW_UFAILURE(objval, "getLogicalMap", error);
+		THROW_UFAILURE(objval->bidi, "getLogicalMap", error);
 		return;
 	}
 
@@ -665,17 +760,17 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getvisualmap_arginfo, ZEND_RETURN_V
 ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getVisualMap) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	int32_t len = ubidi_getResultLength(objval->bidi), i;
+	int32_t len = ubidi_getResultLength(objval->bidi->bidi), i;
 	int32_t *map;
 	UErrorCode error = U_ZERO_ERROR;
 
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
 
 	map = safe_emalloc(sizeof(int32_t), len, 0);
-	ubidi_getVisualMap(objval->bidi, map, &error);
+	ubidi_getVisualMap(objval->bidi->bidi, map, &error);
 	if (U_FAILURE(error)) {
 		efree(map);
-		THROW_UFAILURE(objval, "getVisualMap", error);
+		THROW_UFAILURE(objval->bidi, "getVisualMap", error);
 		return;
 	}
 
@@ -694,7 +789,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getProcessedLength) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_LONG(ubidi_getProcessedLength(objval->bidi));
+	RETURN_LONG(ubidi_getProcessedLength(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -704,41 +799,7 @@ ZEND_END_ARG_INFO();
 static PHP_METHOD(IntlBidi, getResultLength) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
 	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
-	RETURN_LONG(ubidi_getResultLength(objval->bidi));
-}
-/* }}} */
-
-/* {{{ proto int IntlBidi::getCustomizedClass(string $char) */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getcustomclass_arginfo, ZEND_RETURN_VALUE, 1, IS_LONG, 0)
-	ZEND_ARG_TYPE_INFO(0, character, IS_STRING, 0)
-ZEND_END_ARG_INFO();
-static PHP_METHOD(IntlBidi, getCustomizedClass) {
-	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
-	zend_string *text;
-	int32_t pos = 0;
-	size_t len;
-	UChar32 c;
-
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "S", &text) == FAILURE) {
-		return;
-	}
-
-	if (ZSTR_LEN(text) > 4) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
-		return;
-	}
-
-	len = ZSTR_LEN(text);
-
-	U8_NEXT(ZSTR_VAL(text), pos, len, c);
-	if ((size_t)pos != len) {
-		php_bidi_throw_failure(NULL, U_ILLEGAL_ARGUMENT_ERROR,
-			"IntlChar::getCustomizedClass() requires precisely one unicode character as input");
-		return;
-	}
-
-	RETURN_LONG(ubidi_getCustomizedClass(objval->bidi, c));
+	RETURN_LONG(ubidi_getResultLength(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -754,26 +815,32 @@ static PHP_METHOD(IntlBidi, getReordered) {
 	zend_string *ret;
 	UErrorCode error;
 
-	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "l", &options) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_LONG(options)
+	ZEND_PARSE_PARAMETERS_END();
 
-	if (options & UBIDI_INSERT_LRM_FOR_NUMERIC) {
+	if (
+		(options & UBIDI_INSERT_LRM_FOR_NUMERIC) == UBIDI_INSERT_LRM_FOR_NUMERIC ||
+		(ubidi_getReorderingOptions(objval->bidi->bidi) & UBIDI_OPTION_INSERT_MARKS) == UBIDI_OPTION_INSERT_MARKS
+	) {
 		error = U_ZERO_ERROR;
-		utext_len = ubidi_getLength(objval->bidi) + (2 * ubidi_countRuns(objval->bidi, &error));
-		THROW_UFAILURE(objval, "getReordered", error);
+		utext_len = ubidi_getLength(objval->bidi->bidi) + (2 * ubidi_countRuns(objval->bidi->bidi, &error));
+		if (U_FAILURE(error)) {
+			THROW_UFAILURE(objval->bidi, "getReordered", error);
+			return;
+		}
 	} else if (options & UBIDI_REMOVE_BIDI_CONTROLS) {
-		utext_len = ubidi_getLength(objval->bidi);
+		utext_len = ubidi_getLength(objval->bidi->bidi);
 	} else {
-		utext_len = ubidi_getProcessedLength(objval->bidi);
+		utext_len = ubidi_getProcessedLength(objval->bidi->bidi);
 	}
 
 	utext = safe_emalloc(sizeof(UChar), utext_len, sizeof(UChar));
 	error = U_ZERO_ERROR;
-	utext_len = ubidi_writeReordered(objval->bidi, utext, utext_len + 1, options, &error);
+	utext_len = ubidi_writeReordered(objval->bidi->bidi, utext, utext_len, options, &error);
 	if (U_FAILURE(error)) {
 		efree(utext);
-		THROW_UFAILURE(objval, "getReordered", error);
+		THROW_UFAILURE(objval->bidi, "getReordered", error);
 		return;
 	}
 
@@ -781,11 +848,21 @@ static PHP_METHOD(IntlBidi, getReordered) {
 	ret = intl_convert_utf16_to_utf8(utext, utext_len, &error);
 	efree(utext);
 	if (U_FAILURE(error)) {
-		THROW_UFAILURE(objval, "getReordered", error);
+		THROW_UFAILURE(objval->bidi, "getReordered", error);
 		return;
 	}
 
 	RETURN_STR(ret);
+}
+/* }}} */
+
+/* {{{ proto int IntlBidi::getLength() */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(bidi_getlength_arginfo, ZEND_RETURN_VALUE, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+static PHP_METHOD(IntlBidi, getLength) {
+	php_intl_bidi_object *objval = bidi_object_from_zend_object(Z_OBJ_P(getThis()));
+	if (zend_parse_parameters_none_throw() == FAILURE) { return; }
+	RETURN_LONG(ubidi_getLength(objval->bidi->bidi));
 }
 /* }}} */
 
@@ -799,6 +876,7 @@ static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, getReorderingMode, bidi_getreordermode_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, setReorderingOptions, bidi_setreorderopts_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getReorderingOptions, bidi_getreorderopts_arginfo, ZEND_ACC_PUBLIC)
+	PHP_ME(IntlBidi, getLength, bidi_getlength_arginfo, ZEND_ACC_PUBLIC)
 #if ((U_ICU_VERSION_MAJOR_NUM * 10) + U_ICU_VERSION_MINOR_NUM) >= 48
 	PHP_ME(IntlBidi, setContext, bidi_setctx_arginfo, ZEND_ACC_PUBLIC)
 #endif
@@ -821,7 +899,6 @@ static zend_function_entry bidi_methods[] = {
 	PHP_ME(IntlBidi, getVisualMap, bidi_getvisualmap_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getProcessedLength, bidi_getprocessedlen_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getResultLength, bidi_getresultlen_arginfo, ZEND_ACC_PUBLIC)
-	PHP_ME(IntlBidi, getCustomizedClass, bidi_getcustomclass_arginfo, ZEND_ACC_PUBLIC)
 	PHP_ME(IntlBidi, getReordered, bidi_getreordered_arginfo, ZEND_ACC_PUBLIC)
 
 	PHP_FE_END
@@ -837,7 +914,6 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 
 	zend_object_std_init(&objval->std, ce);
 	object_properties_init(&objval->std, ce);
-	intl_error_init(&(objval->error));
 
 	objval->std.handlers = &bidi_object_handlers;
 
@@ -846,13 +922,7 @@ static zend_object *bidi_object_ctor(zend_class_entry *ce) {
 
 static void bidi_object_dtor(zend_object *obj) {
 	php_intl_bidi_object *objval = bidi_object_from_zend_object(obj);
-
-	if (objval->bidi) { ubidi_close(objval->bidi); }
-	if (objval->prologue) { efree(objval->prologue); }
-	if (objval->text)     { efree(objval->text); }
-	if (objval->epilogue) { efree(objval->epilogue); }
-
-	intl_error_reset(&(objval->error));
+	bidi_free_bidi_object(objval->bidi);
 }
 
 PHP_MINIT_FUNCTION(intl_bidi) {
