@@ -4182,6 +4182,65 @@ static int zend_has_finally(void) /* {{{ */
 }
 /* }}} */
 
+static zend_bool zend_check_literal_return_type(zend_op_array *op_array, znode *node) /* {{{ */
+{
+	zend_type hint;
+	zend_uchar type;
+
+	if ((op_array->fn_flags & ZEND_ACC_HAS_RETURN_TYPE) == 0) {
+		/* No return type */
+		return 1;
+	}
+
+	if (!node || (node->op_type != IS_CONST)) {
+		/* Not a literal return */
+		return 1;
+	}
+
+	hint = op_array->arg_info[-1].type;
+	if (!ZEND_TYPE_IS_SET(hint)) {
+		/* No return type (belts and suspenders) */
+		return 1;
+	}
+
+	type = Z_TYPE(node->u.constant);
+	if ((type == IS_NULL) & ZEND_TYPE_ALLOW_NULL(hint)) {
+		/* Nullable typehint */
+		return 1;
+	}
+
+	if (ZEND_TYPE_IS_CODE(hint)) {
+		switch (ZEND_TYPE_CODE(hint)) {
+			case _IS_BOOL:
+				return (type == IS_TRUE) || (type == IS_FALSE);
+			case _IS_NUMBER:
+				if (type == IS_STRING) {
+					return is_numeric_string(Z_STRVAL(node->u.constant), Z_STRLEN(node->u.constant), NULL, NULL, 0);
+				}
+				return (type == IS_LONG) || (type == IS_DOUBLE);
+			case IS_VOID:
+				return type == IS_NULL;
+			case IS_CALLABLE:
+				/* We can't actually be sure at compile time,
+				 * assume any string or array is callable and
+				 * let runtime sort it out.
+				 */
+				return (type == IS_STRING) || (type == IS_ARRAY);
+			case IS_ITERABLE:
+				/* Among literals, only arrays are iterable. */
+				return type == IS_ARRAY;
+
+			default:
+				/* Basic type */
+				return (ZEND_TYPE_CODE(hint) == type);
+		}
+	}
+
+	/* TODO: Class typehints */
+	return 1;
+}
+/* }}} */
+
 void zend_compile_return(zend_ast *ast) /* {{{ */
 {
 	zend_ast *expr_ast = ast->child[0];
@@ -4203,6 +4262,9 @@ void zend_compile_return(zend_ast *ast) /* {{{ */
 		zend_compile_var(&expr_node, expr_ast, BP_VAR_W, 1);
 	} else {
 		zend_compile_expr(&expr_node, expr_ast);
+		if (!zend_check_literal_return_type(CG(active_op_array), &expr_node)) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Unexpected type, blah blah");
+		}
 	}
 
 	if ((CG(active_op_array)->fn_flags & ZEND_ACC_HAS_FINALLY_BLOCK)
