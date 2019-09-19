@@ -445,18 +445,32 @@ static zend_always_inline uint32_t get_temporary_variable(void) /* {{{ */
 }
 /* }}} */
 
-static int lookup_cv(zend_string *name) /* {{{ */{
+static int find_cv(zend_string *name) /* {{{ */{
 	zend_op_array *op_array = CG(active_op_array);
-	int i = 0;
 	zend_ulong hash_value = zend_string_hash_val(name);
+	int i;
 
-	while (i < op_array->last_var) {
+	for (i = 0; i < op_array->last_var; ++i) {
 		if (ZSTR_H(op_array->vars[i]) == hash_value
 		 && zend_string_equals(op_array->vars[i], name)) {
 			return (int)(zend_intptr_t)ZEND_CALL_VAR_NUM(NULL, i);
 		}
-		i++;
 	}
+
+	return -1;
+}
+
+static int declare_cv(zend_string *name) /* {{{ */{
+	zend_op_array *op_array = CG(active_op_array);
+	int i = find_cv(name);
+
+	if (i >= 0) {
+		if (CG(active_op_array)->fn_flags & ZEND_ACC_DECLARE_VARS) {
+			zend_error_noreturn(E_COMPILE_ERROR, "Cannot redeclare variable $%s", ZSTR_VAL(name));
+		}
+		return i;
+	}
+
 	i = op_array->last_var;
 	op_array->last_var++;
 	if (op_array->last_var > CG(context).vars_size) {
@@ -466,6 +480,22 @@ static int lookup_cv(zend_string *name) /* {{{ */{
 
 	op_array->vars[i] = zend_string_copy(name);
 	return (int)(zend_intptr_t)ZEND_CALL_VAR_NUM(NULL, i);
+}
+/* }}} */
+
+static int lookup_cv(zend_string *name) /* {{{ */{
+	int i = find_cv(name);
+
+	if (i >= 0) {
+		return i;
+	}
+
+	if (CG(active_op_array)->fn_flags & ZEND_ACC_DECLARE_VARS) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Undeclared variable: %s", ZSTR_VAL(name));
+		return FAILURE;
+	}
+
+	return declare_cv(name);
 }
 /* }}} */
 
@@ -2309,6 +2339,47 @@ static int zend_try_compile_cv(znode *result, zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_declare_var(zend_ast *ast) /* {{{ */
+{
+	zend_ast *name_ast = ast->child[0];
+	zval *name_zv;
+	zend_string *name;
+	zend_ast *value_ast = ast->child[1];
+	znode var_node, val_node;
+
+	ZEND_ASSERT(name_ast->kind == ZEND_AST_ZVAL);
+	name_zv = zend_ast_get_zval(name_ast);
+
+	if (EXPECTED(Z_TYPE_P(name_zv) == IS_STRING)) {
+		name = zval_make_interned_string(name_zv);
+	} else {
+		name = zend_new_interned_string(zval_get_string_func(name_zv));
+	}
+
+	if (zend_is_auto_global(name)) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Superglobal $%s may not be declared using var keyword", ZSTR_VAL(name));
+		return;
+	}
+
+	var_node.op_type = IS_CV;
+	var_node.u.op.var = declare_cv(name);
+
+	if (UNEXPECTED(Z_TYPE_P(name_zv) != IS_STRING)) {
+		zend_string_release_ex(name, 0);
+	}
+
+	if (value_ast) {
+		zend_compile_expr(&val_node, value_ast);
+	} else {
+		/* Initialize to NULL to avoid undefined notice which would be confusing. */
+		val_node.op_type = IS_CONST;
+		ZVAL_NULL(&val_node.u.constant);
+	}
+
+	zend_emit_op(NULL, ZEND_ASSIGN, &var_node, &val_node);
+}
+/* }}} */
+
 static zend_op *zend_compile_simple_var_no_cv(znode *result, zend_ast *ast, uint32_t type, int delayed) /* {{{ */
 {
 	zend_ast *name_ast = ast->child[0];
@@ -4113,6 +4184,9 @@ void zend_compile_unset(zend_ast *ast) /* {{{ */
 			if (is_this_fetch(var_ast)) {
 				zend_error_noreturn(E_COMPILE_ERROR, "Cannot unset $this");
 			} else if (zend_try_compile_cv(&var_node, var_ast) == SUCCESS) {
+				if (CG(active_op_array)->fn_flags & ZEND_ACC_DECLARE_VARS) {
+					zend_error_noreturn(E_COMPILE_ERROR, "Cannot unset declared variable");
+				}
 				opline = zend_emit_op(NULL, ZEND_UNSET_CV, &var_node, NULL);
 			} else {
 				opline = zend_compile_simple_var_no_cv(NULL, var_ast, BP_VAR_UNSET, 0);
@@ -5191,6 +5265,22 @@ void zend_compile_declare(zend_ast *ast) /* {{{ */
 				CG(active_op_array)->fn_flags |= ZEND_ACC_STRICT_TYPES;
 			}
 
+		} else if (zend_string_equals_literal_ci(name, "declare_vars")) {
+			zval value_zv;
+
+			if (stmt_ast != NULL) {
+				zend_error_noreturn(E_COMPILE_ERROR, "declare_vars declaration must not use block mode");
+			}
+
+			zend_const_expr_to_zval(&value_zv, value_ast);
+			if (Z_TYPE(value_zv) != IS_LONG || (Z_LVAL(value_zv) != 0 && Z_LVAL(value_zv) != 1)) {
+				zend_error_noreturn(E_COMPILE_ERROR, "declare_vars declaration must have 0 or 1 as its value");
+			}
+
+			if (Z_LVAL(value_zv)) {
+				CG(active_op_array)->fn_flags |= ZEND_ACC_DECLARE_VARS;
+			}
+
 		} else {
 			zend_error(E_COMPILE_WARNING, "Unsupported declare '%s'", ZSTR_VAL(name));
 		}
@@ -5324,7 +5414,7 @@ void zend_compile_params(zend_ast *ast, zend_ast *return_type_ast) /* {{{ */
 		}
 
 		var_node.op_type = IS_CV;
-		var_node.u.op.var = lookup_cv(name);
+		var_node.u.op.var = declare_cv(name);
 
 		if (EX_VAR_TO_NUM(var_node.u.op.var) != i) {
 			zend_error_noreturn(E_COMPILE_ERROR, "Redefinition of parameter $%s",
@@ -5839,7 +5929,8 @@ void zend_compile_func_decl(znode *result, zend_ast *ast, zend_bool toplevel) /*
 		ZEND_MAP_PTR_SET(op_array->run_time_cache, NULL);
 	}
 
-	op_array->fn_flags |= (orig_op_array->fn_flags & ZEND_ACC_STRICT_TYPES);
+	op_array->fn_flags |= orig_op_array->fn_flags &
+		(ZEND_ACC_STRICT_TYPES | ZEND_ACC_DECLARE_VARS);
 	op_array->fn_flags |= decl->flags;
 	op_array->line_start = decl->start_lineno;
 	op_array->line_end = decl->end_lineno;
@@ -8375,6 +8466,9 @@ void zend_compile_stmt(zend_ast *ast) /* {{{ */
 			break;
 		case ZEND_AST_HALT_COMPILER:
 			zend_compile_halt_compiler(ast);
+			break;
+		case ZEND_AST_DECLARE_VAR:
+			zend_compile_declare_var(ast);
 			break;
 		default:
 		{

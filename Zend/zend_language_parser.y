@@ -459,6 +459,8 @@ statement:
 	|	T_THROW expr ';' { $$ = zend_ast_create(ZEND_AST_THROW, $2); }
 	|	T_GOTO T_STRING ';' { $$ = zend_ast_create(ZEND_AST_GOTO, $2); }
 	|	T_STRING ':' { $$ = zend_ast_create(ZEND_AST_LABEL, $1); }
+	|	T_VAR T_VARIABLE ';' { $$ = zend_ast_create(ZEND_AST_DECLARE_VAR, $2, NULL); }
+	|	T_VAR T_VARIABLE '=' expr ';' { $$ = zend_ast_create(ZEND_AST_DECLARE_VAR, $2, $4); }
 ;
 
 catch_list:

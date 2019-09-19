@@ -284,7 +284,7 @@ typedef struct _zend_oparray_context {
 /* Whether this class was used in its unlinked state.     |     |     |     */
 #define ZEND_ACC_HAS_UNLINKED_USES       (1 << 23) /*  X  |     |     |     */
 /*                                                        |     |     |     */
-/* Function Flags (unused: 17, 23, 26)                    |     |     |     */
+/* Function Flags (unused: 17, 23)                        |     |     |     */
 /* ==============                                         |     |     |     */
 /*                                                        |     |     |     */
 /* deprecation flag                                       |     |     |     */
@@ -331,6 +331,9 @@ typedef struct _zend_oparray_context {
 /* internal function is allocated at arena (int only)     |     |     |     */
 #define ZEND_ACC_ARENA_ALLOCATED         (1 << 25) /*     |  X  |     |     */
 /*                                                        |     |     |     */
+/* op_array requires variable declaration                 |     |     |     */
+#define ZEND_ACC_DECLARE_VARS            (1 << 26) /*     |  X  |     |     */
+/*                                                        |     |     |     */
 /* op_array is a clone of trait method                    |     |     |     */
 #define ZEND_ACC_TRAIT_CLONE             (1 << 27) /*     |  X  |     |     */
 /*                                                        |     |     |     */
@@ -345,7 +348,6 @@ typedef struct _zend_oparray_context {
 /*                                                        |     |     |     */
 /* op_array uses strict mode types                        |     |     |     */
 #define ZEND_ACC_STRICT_TYPES            (1U << 31) /*    |  X  |     |     */
-
 
 #define ZEND_ACC_PPP_MASK  (ZEND_ACC_PUBLIC | ZEND_ACC_PROTECTED | ZEND_ACC_PRIVATE)
 

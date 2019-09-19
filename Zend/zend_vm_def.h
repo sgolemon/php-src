@@ -1813,7 +1813,15 @@ ZEND_VM_C_LABEL(fetch_this):
 		} else if (type == BP_VAR_IS) {
 			retval = &EG(uninitialized_zval);
 		} else {
-			zend_error(E_NOTICE,"Undefined variable: %s", ZSTR_VAL(name));
+			if (EX(func)->op_array.fn_flags & ZEND_ACC_DECLARE_VARS) {
+				if (!EG(exception)) {
+					zend_throw_exception_ex(
+						 zend_ce_undeclared_variable_error, 0, "Undeclared variable: %s", ZSTR_VAL(name));
+				}
+				HANDLE_EXCEPTION();
+			} else {
+				zend_error(E_NOTICE,"Undefined variable: %s", ZSTR_VAL(name));
+			}
 			if (type == BP_VAR_RW) {
 				retval = zend_hash_update(target_symbol_table, name, &EG(uninitialized_zval));
 			} else {
@@ -6043,6 +6051,14 @@ ZEND_VM_HANDLER(74, ZEND_UNSET_VAR, CONST|TMPVAR|CV, UNUSED, VAR_FETCH)
 	} else if (EXPECTED(Z_TYPE_P(varname) == IS_STRING)) {
 		name = Z_STR_P(varname);
 		tmp_name = NULL;
+
+		if (UNEXPECTED(EX(func)->op_array.fn_flags & ZEND_ACC_DECLARE_VARS)) {
+			if (!EG(exception)) {
+				zend_throw_exception_ex(
+					 zend_ce_illegal_unset_error, 0, "Declared var $%s may not be unset", ZSTR_VAL(name));
+			}
+			HANDLE_EXCEPTION();
+		}
 	} else {
 		if (OP1_TYPE == IS_CV && UNEXPECTED(Z_TYPE_P(varname) == IS_UNDEF)) {
 			varname = ZVAL_UNDEFINED_OP1();
