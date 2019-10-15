@@ -8722,6 +8722,15 @@ void zend_compile_stmt(zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
+void zend_compile_nullsafe(znode *result, zend_ast *ast) /* {{{ */
+{
+	zend_ast *wrapped_ast = ast->child[0];
+	znode wrapped;
+	zend_compile_expr(&wrapped, wrapped_ast);
+	zend_emit_op(result, ZEND_NULLSAFE, &wrapped, NULL);
+}
+/* }}} */
+
 void zend_compile_expr(znode *result, zend_ast *ast) /* {{{ */
 {
 	/* CG(zend_lineno) = ast->lineno; */
@@ -8851,6 +8860,9 @@ void zend_compile_expr(znode *result, zend_ast *ast) /* {{{ */
 		case ZEND_AST_CLOSURE:
 		case ZEND_AST_ARROW_FUNC:
 			zend_compile_func_decl(result, ast, 0);
+			return;
+		case ZEND_AST_NULLSAFE:
+			zend_compile_nullsafe(result, ast);
 			return;
 		default:
 			ZEND_ASSERT(0 /* not supported */);

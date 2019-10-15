@@ -192,6 +192,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_INTERFACE  "interface (T_INTERFACE)"
 %token T_EXTENDS    "extends (T_EXTENDS)"
 %token T_IMPLEMENTS "implements (T_IMPLEMENTS)"
+%token T_NULLSAFE_OBJECT_OPERATOR "?-> (T_NULLSAFE_OBJECT_OPERATOR)"
 %token T_OBJECT_OPERATOR "-> (T_OBJECT_OPERATOR)"
 %token T_DOUBLE_ARROW    "=> (T_DOUBLE_ARROW)"
 %token T_LIST            "list (T_LIST)"
@@ -1164,6 +1165,9 @@ callable_variable:
 			{ $$ = zend_ast_create_ex(ZEND_AST_DIM, ZEND_DIM_ALTERNATIVE_SYNTAX, $1, $3); }
 	|	dereferencable T_OBJECT_OPERATOR property_name argument_list
 			{ $$ = zend_ast_create(ZEND_AST_METHOD_CALL, $1, $3, $4); }
+	|	dereferencable T_NULLSAFE_OBJECT_OPERATOR property_name argument_list
+			{ $$ = zend_ast_create(ZEND_AST_METHOD_CALL,
+				zend_ast_create(ZEND_AST_NULLSAFE, $1), $3, $4); }
 	|	function_call { $$ = $1; }
 ;
 
@@ -1174,6 +1178,9 @@ variable:
 			{ $$ = $1; }
 	|	dereferencable T_OBJECT_OPERATOR property_name
 			{ $$ = zend_ast_create(ZEND_AST_PROP, $1, $3); }
+	|	dereferencable T_NULLSAFE_OBJECT_OPERATOR property_name
+			{ $$ = zend_ast_create(ZEND_AST_PROP,
+				zend_ast_create(ZEND_AST_NULLSAFE, $1), $3); }
 ;
 
 simple_variable:
@@ -1198,6 +1205,9 @@ new_variable:
 			{ $$ = zend_ast_create_ex(ZEND_AST_DIM, ZEND_DIM_ALTERNATIVE_SYNTAX, $1, $3); }
 	|	new_variable T_OBJECT_OPERATOR property_name
 			{ $$ = zend_ast_create(ZEND_AST_PROP, $1, $3); }
+	|	new_variable T_NULLSAFE_OBJECT_OPERATOR property_name
+			{ $$ = zend_ast_create(ZEND_AST_PROP,
+				zend_ast_create(ZEND_AST_NULLSAFE, $1), $3); }
 	|	class_name T_PAAMAYIM_NEKUDOTAYIM simple_variable
 			{ $$ = zend_ast_create(ZEND_AST_STATIC_PROP, $1, $3); }
 	|	new_variable T_PAAMAYIM_NEKUDOTAYIM simple_variable
@@ -1272,6 +1282,10 @@ encaps_var:
 	|	T_VARIABLE T_OBJECT_OPERATOR T_STRING
 			{ $$ = zend_ast_create(ZEND_AST_PROP,
 			      zend_ast_create(ZEND_AST_VAR, $1), $3); }
+	|	T_VARIABLE T_NULLSAFE_OBJECT_OPERATOR T_STRING
+			{ $$ = zend_ast_create(ZEND_AST_PROP,
+				zend_ast_create(ZEND_AST_NULLSAFE,
+					zend_ast_create(ZEND_AST_VAR, $1)), $3); }
 	|	T_DOLLAR_OPEN_CURLY_BRACES expr '}'
 			{ $$ = zend_ast_create(ZEND_AST_VAR, $2); }
 	|	T_DOLLAR_OPEN_CURLY_BRACES T_STRING_VARNAME '}'

@@ -7179,6 +7179,23 @@ ZEND_VM_HOT_HANDLER(0, ZEND_NOP, ANY, ANY)
 	ZEND_VM_NEXT_OPCODE();
 }
 
+ZEND_VM_HOT_HANDLER(195, ZEND_NULLSAFE, ANY, UNUSED)
+{
+	USE_OPLINE
+	zval *value;
+	zval *result = EX_VAR(opline->result.var);
+
+	value = GET_OP1_ZVAL_PTR_UNDEF(BP_VAR_R);
+	if (Z_TYPE_P(value) != IS_NULL) {
+		ZVAL_COPY(result, value);
+	} else {
+		object_init_ex(result, zend_ce_nullsafe);
+	}
+
+	FREE_OP1();
+	ZEND_VM_NEXT_OPCODE();
+}
+
 ZEND_VM_HELPER(zend_dispatch_try_catch_finally_helper, ANY, ANY, uint32_t try_catch_offset, uint32_t op_num)
 {
 	/* May be NULL during generator closing (only finally blocks are executed) */
