@@ -677,6 +677,7 @@ union_type:
 return_type:
 		/* empty */	{ $$ = NULL; }
 	|	':' type_expr	{ $$ = $2; }
+	|	':' T_STATIC    { zval zv; zend_lex_tstring(&zv); $$ = zend_ast_create_zval(&zv); $$->attr = ZEND_NAME_NOT_FQ; }
 ;
 
 argument_list:

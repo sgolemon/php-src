@@ -1070,11 +1070,15 @@ static zend_always_inline zend_bool zend_check_type(
 			if (EXPECTED(*cache_slot)) {
 				ce = (zend_class_entry *) *cache_slot;
 			} else {
-				ce = zend_fetch_class(ZEND_TYPE_NAME(type), (ZEND_FETCH_CLASS_AUTO | ZEND_FETCH_CLASS_NO_AUTOLOAD));
+				int fetch_type = zend_get_class_fetch_type(ZEND_TYPE_NAME(type));
+				ce = zend_fetch_class(ZEND_TYPE_NAME(type), (fetch_type | ZEND_FETCH_CLASS_NO_AUTOLOAD));
 				if (UNEXPECTED(!ce)) {
 					goto builtin_types;
 				}
-				*cache_slot = (void *) ce;
+				if (fetch_type != ZEND_FETCH_CLASS_STATIC) {
+					/* static type may (likely) change between invocations, never memoize */
+					*cache_slot = (void *) ce;
+				}
 			}
 			if (instanceof_function(Z_OBJCE_P(arg), ce)) {
 				return 1;
