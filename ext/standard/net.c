@@ -41,6 +41,14 @@
 # include <netdb.h>
 #endif
 
+#ifdef HAVE_NETPACKET_PACKET_H
+# include <netpacket/packet.h>
+#endif
+
+#ifdef HAVE_NET_IF_DL_H
+# include <net/if_dl.h>
+#endif
+
 PHPAPI zend_string* php_inet_ntop(const struct sockaddr *addr) {
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 
@@ -126,6 +134,29 @@ static void iface_append_unicast(zval *unicast, zend_long flags,
 
 	add_next_index_zval(unicast, &u);
 }
+
+void iface_set_mac(zval *iface, unsigned char *addr, size_t addr_len) {
+	zend_string *mac;
+	char *s;
+	size_t i;
+
+	ZEND_ASSERT(Z_TYPE_P(iface) == IS_ARRAY);
+	if (zend_hash_str_exists(Z_ARR_P(iface), "mac", sizeof("mac") - 1)) {
+		return;
+	}
+
+	mac = zend_string_alloc(addr_len * 3, 0);
+	s = ZSTR_VAL(mac);
+
+	for (i = 0; i < addr_len; ++i) {
+		s += snprintf(s, 4, "%02X:", (int)addr[i]);
+	}
+	*(--s) = 0;
+
+	ZSTR_LEN(mac) = s - ZSTR_VAL(mac);
+	add_assoc_str(iface, "mac", mac);
+}
+
 #endif
 
 /* {{{ proto array|false net_get_interfaces()
@@ -200,15 +231,7 @@ PHP_FUNCTION(net_get_interfaces) {
 		}
 
 		if (p->PhysicalAddressLength > 0) {
-			zend_string *mac = zend_string_alloc(p->PhysicalAddressLength * 3, 0);
-			char *s = ZSTR_VAL(mac);
-			ULONG i;
-			for (i = 0; i < p->PhysicalAddressLength; ++i) {
-				s += snprintf(s, 4, "%02X:", p->PhysicalAddress[i]);
-			}
-			*(--s) = 0;
-			ZSTR_LEN(mac) = s - ZSTR_VAL(mac);
-			add_assoc_str(&iface, "mac", mac);
+			iface_set_mac(&iface, (unsigned char*)p->PhysicalAddress, p->PhysicalAddressLength);
 		}
 
 		/* Flags could be placed at this level,
@@ -280,6 +303,21 @@ PHP_FUNCTION(net_get_interfaces) {
 			array_init(&newif);
 			iface = zend_hash_str_add(Z_ARR_P(return_value), p->ifa_name, strlen(p->ifa_name), &newif);
 		}
+
+#ifdef HAVE_NETPACKET_PACKET_H
+		/* Generally used on Linux */
+		if (p->ifa_addr->sa_family == AF_PACKET) {
+			struct sockaddr_ll *s = (struct sockaddr_ll*)p->ifa_addr;
+			iface_set_mac(iface, (unsigned char*)s->sll_addr, s->sll_halen);
+		}
+#endif
+#ifdef HAVE_NET_IF_DL_H
+		/* Generally used on BSD/macOS */
+		if (p->ifa_addr->sa_family == AF_LINK) {
+			struct sockaddr_dl *link = (struct sockaddr_dl*)p->ifa_addr;
+			iface_set_mac(iface, (unsigned char*)LLADDR(link), link->sdl_alen);
+		}
+#endif
 
 		unicast = zend_hash_str_find(Z_ARR_P(iface), "unicast", sizeof("unicast") - 1);
 		if (!unicast) {

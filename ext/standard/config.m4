@@ -482,6 +482,16 @@ else
 fi
 
 dnl
+dnl netpacket/packet.h
+dnl
+AC_CHECK_HEADERS([netpacket/packet.h], [], [], [ #include <netpacket/packet.h> ])
+
+dnl
+dnl net/if_dl.h
+dnl
+AC_CHECK_HEADERS([net/if_dl.h], [], [], [ #include <net/if_dl.h> ])
+
+dnl
 dnl Setup extension sources
 dnl
 PHP_NEW_EXTENSION(standard, array.c base64.c basic_functions.c browscap.c crc32.c crypt.c \
