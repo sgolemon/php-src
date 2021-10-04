@@ -1450,6 +1450,8 @@ non_empty_array_pair_list:
 array_pair:
 		expr T_DOUBLE_ARROW expr
 			{ $$ = zend_ast_create(ZEND_AST_ARRAY_ELEM, $3, $1); }
+	|	T_DOUBLE_ARROW T_VARIABLE
+			{ $$ = zend_ast_create(ZEND_AST_ARRAY_ELEM, zend_ast_create(ZEND_AST_VAR, $2), $2); }
 	|	expr
 			{ $$ = zend_ast_create(ZEND_AST_ARRAY_ELEM, $1, NULL); }
 	|	expr T_DOUBLE_ARROW ampersand variable
