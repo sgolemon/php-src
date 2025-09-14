@@ -18,6 +18,7 @@
 #define PHP_GLOBALS_H
 
 #include "zend_globals.h"
+#include "zend_highlight.h"
 
 #include <stdint.h>
 
@@ -173,6 +174,8 @@ struct _php_core_globals {
 	char *syslog_ident;
 	zend_long syslog_filter;
 	zend_long error_log_mode;
+
+	zend_syntax_highlighter_ini syntax_highlighter_ini;
 };
 
 

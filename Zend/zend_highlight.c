@@ -81,8 +81,10 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 	int token_type;
 	char *last_color = syntax_highlighter_ini->highlight_html;
 	char *next_color;
+	const bool use_css_class = syntax_highlighter_ini->use_css_class;
+	const char *preamble = use_css_class ? "class=\"" : "style=\"color: ";
 
-	zend_printf("<pre><code style=\"color: %s\">", last_color);
+	zend_printf("<pre><code %s%s\">", preamble, last_color);
 	/* highlight stuff coming back from zendlex() */
 	while ((token_type=lex_scan(&token, NULL))) {
 		switch (token_type) {
@@ -127,12 +129,12 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 		}
 
 		if (last_color != next_color) {
-			if (last_color != syntax_highlighter_ini->highlight_html) {
+			if (use_css_class || (last_color != syntax_highlighter_ini->highlight_html)) {
 				zend_printf("</span>");
 			}
 			last_color = next_color;
-			if (last_color != syntax_highlighter_ini->highlight_html) {
-				zend_printf("<span style=\"color: %s\">", last_color);
+			if (use_css_class || (last_color != syntax_highlighter_ini->highlight_html)) {
+				zend_printf("<span %s%s\">", preamble, last_color);
 			}
 		}
 
@@ -155,7 +157,7 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 		ZVAL_UNDEF(&token);
 	}
 
-	if (last_color != syntax_highlighter_ini->highlight_html) {
+	if (use_css_class || (last_color != syntax_highlighter_ini->highlight_html)) {
 		zend_printf("</span>");
 	}
 	zend_printf("</code></pre>");

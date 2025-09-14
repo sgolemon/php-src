@@ -769,6 +769,35 @@ static PHP_INI_MH(OnChangeMailForceExtra)
 /* defined in browscap.c */
 PHP_INI_MH(OnChangeBrowscap);
 
+/* {{{ PHP_INI_MH */
+static PHP_INI_MH(OnUpdateHighlightStyle)
+{
+	if (!zend_string_equals_literal(new_value, "color")) {
+		PG(syntax_highlighter_ini.use_css_class) = false;
+		return SUCCESS;
+	} else if (!zend_string_equals_literal(new_value, "class")) {
+		PG(syntax_highlighter_ini.use_css_class) = true;
+		return SUCCESS;
+	} else {
+		php_error(E_ERROR, "Invalid value for \"highlight.css_style\" INI option, expected \"color\" or \"class\", got \"%s\"", ZSTR_VAL(new_value));
+		return FAILURE;
+	}
+}
+/* }}} */
+
+/* {{{ PHP_INI_DISP
+ * Display a simple string if use_css_style, otherwise show HTML color.
+ */
+static PHP_INI_DISP(php_highlight_ini_color_displayer_cb)
+{
+	if (PG(syntax_highlighter_ini.use_css_class)) {
+		php_ini_string_displayer_cb(PHP_INI_DISP_PARAM_PASSTHRU);
+	} else {
+		php_ini_color_displayer_cb(PHP_INI_DISP_PARAM_PASSTHRU);
+	}
+}
+/* }}} */
+
 
 /* Need to be read from the environment (?):
  * PHP_AUTO_PREPEND_FILE
@@ -787,11 +816,12 @@ PHP_INI_MH(OnChangeBrowscap);
 
 /* {{{ PHP_INI */
 PHP_INI_BEGIN()
-	PHP_INI_ENTRY_EX("highlight.comment",		HL_COMMENT_COLOR,	PHP_INI_ALL,	NULL,			php_ini_color_displayer_cb)
-	PHP_INI_ENTRY_EX("highlight.default",		HL_DEFAULT_COLOR,	PHP_INI_ALL,	NULL,			php_ini_color_displayer_cb)
-	PHP_INI_ENTRY_EX("highlight.html",			HL_HTML_COLOR,		PHP_INI_ALL,	NULL,			php_ini_color_displayer_cb)
-	PHP_INI_ENTRY_EX("highlight.keyword",		HL_KEYWORD_COLOR,	PHP_INI_ALL,	NULL,			php_ini_color_displayer_cb)
-	PHP_INI_ENTRY_EX("highlight.string",		HL_STRING_COLOR,	PHP_INI_ALL,	NULL,			php_ini_color_displayer_cb)
+	STD_PHP_INI_ENTRY("highlight.css_style", 	"color",			PHP_INI_ALL,	OnUpdateHighlightStyle, syntax_highlighter_ini.use_css_class,		php_core_globals, core_globals)
+	STD_PHP_INI_ENTRY_EX("highlight.comment",	HL_COMMENT_COLOR,	PHP_INI_ALL,	OnUpdateString,			syntax_highlighter_ini.highlight_comment,	php_core_globals, core_globals, php_highlight_ini_color_displayer_cb)
+	STD_PHP_INI_ENTRY_EX("highlight.default",	HL_DEFAULT_COLOR,	PHP_INI_ALL,	OnUpdateString,			syntax_highlighter_ini.highlight_default,	php_core_globals, core_globals, php_highlight_ini_color_displayer_cb)
+	STD_PHP_INI_ENTRY_EX("highlight.html",		HL_HTML_COLOR,		PHP_INI_ALL,	OnUpdateString,			syntax_highlighter_ini.highlight_html,		php_core_globals, core_globals, php_highlight_ini_color_displayer_cb)
+	STD_PHP_INI_ENTRY_EX("highlight.keyword",	HL_KEYWORD_COLOR,	PHP_INI_ALL,	OnUpdateString,			syntax_highlighter_ini.highlight_keyword,	php_core_globals, core_globals, php_highlight_ini_color_displayer_cb)
+	STD_PHP_INI_ENTRY_EX("highlight.string",	HL_STRING_COLOR,	PHP_INI_ALL,	OnUpdateString,			syntax_highlighter_ini.highlight_string, 	php_core_globals, core_globals, php_highlight_ini_color_displayer_cb)
 
 	STD_PHP_INI_ENTRY_EX("display_errors",		"1",		PHP_INI_ALL,		OnUpdateDisplayErrors,	display_errors,			php_core_globals,	core_globals, display_errors_mode)
 	STD_PHP_INI_BOOLEAN("display_startup_errors",	"1",	PHP_INI_ALL,		OnUpdateBool,			display_startup_errors,	php_core_globals,	core_globals)

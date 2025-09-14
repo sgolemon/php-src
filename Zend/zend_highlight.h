@@ -28,8 +28,8 @@
 #define HL_STRING_COLOR      "#DD0000"    /* red */
 #define HL_KEYWORD_COLOR     "#007700"    /* green */
 
-
 typedef struct _zend_syntax_highlighter_ini {
+	bool use_css_class;
 	char *highlight_html;
 	char *highlight_comment;
 	char *highlight_default;

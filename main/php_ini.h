@@ -36,6 +36,7 @@ PHPAPI bool php_ini_has_per_host_config(void);
 PHPAPI void php_ini_activate_per_dir_config(char *path, size_t path_len);
 PHPAPI void php_ini_activate_per_host_config(const char *host, size_t host_len);
 PHPAPI HashTable* php_ini_get_configuration_hash(void);
+PHPAPI ZEND_INI_DISP(php_ini_string_displayer_cb);
 END_EXTERN_C()
 
 #define PHP_INI_USER	ZEND_INI_USER
@@ -46,8 +47,9 @@ END_EXTERN_C()
 
 #define php_ini_entry	zend_ini_entry
 
-#define PHP_INI_MH		ZEND_INI_MH
-#define PHP_INI_DISP	ZEND_INI_DISP
+#define PHP_INI_MH						ZEND_INI_MH
+#define PHP_INI_DISP					ZEND_INI_DISP
+#define PHP_INI_DISP_PARAM_PASSTHRU		ZEND_INI_DISP_PARAM_PASSTHRU
 
 #define PHP_INI_BEGIN		ZEND_INI_BEGIN
 #define PHP_INI_END			ZEND_INI_END

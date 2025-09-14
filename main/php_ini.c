@@ -70,27 +70,22 @@ static ZEND_COLD void php_ini_displayer_cb(zend_ini_entry *ini_entry, int type)
 	if (ini_entry->displayer) {
 		ini_entry->displayer(ini_entry, type);
 	} else {
-		char *display_string;
-		size_t display_string_length;
-		int esc_html=0;
+		php_ini_string_displayer_cb(ini_entry, type);
+	}
+}
+/* }}} */
 
-		if (type == ZEND_INI_DISPLAY_ORIG && ini_entry->modified) {
-			if (ini_entry->orig_value && ZSTR_VAL(ini_entry->orig_value)[0]) {
-				display_string = ZSTR_VAL(ini_entry->orig_value);
-				display_string_length = ZSTR_LEN(ini_entry->orig_value);
-				esc_html = !sapi_module.phpinfo_as_text;
-			} else {
-				if (!sapi_module.phpinfo_as_text) {
-					display_string = "<i>no value</i>";
-					display_string_length = sizeof("<i>no value</i>") - 1;
-				} else {
-					display_string = "no value";
-					display_string_length = sizeof("no value") - 1;
-				}
-			}
-		} else if (ini_entry->value && ZSTR_VAL(ini_entry->value)[0]) {
-			display_string = ZSTR_VAL(ini_entry->value);
-			display_string_length = ZSTR_LEN(ini_entry->value);
+/* {{{ php_ini_string_displayer_cb */
+PHPAPI PHP_INI_DISP(php_ini_string_displayer_cb)
+{
+	char *display_string;
+	size_t display_string_length;
+	int esc_html=0;
+
+	if (type == ZEND_INI_DISPLAY_ORIG && ini_entry->modified) {
+		if (ini_entry->orig_value && ZSTR_VAL(ini_entry->orig_value)[0]) {
+			display_string = ZSTR_VAL(ini_entry->orig_value);
+			display_string_length = ZSTR_LEN(ini_entry->orig_value);
 			esc_html = !sapi_module.phpinfo_as_text;
 		} else {
 			if (!sapi_module.phpinfo_as_text) {
@@ -101,12 +96,24 @@ static ZEND_COLD void php_ini_displayer_cb(zend_ini_entry *ini_entry, int type)
 				display_string_length = sizeof("no value") - 1;
 			}
 		}
-
-		if (esc_html) {
-			php_html_puts(display_string, display_string_length);
+	} else if (ini_entry->value && ZSTR_VAL(ini_entry->value)[0]) {
+		display_string = ZSTR_VAL(ini_entry->value);
+		display_string_length = ZSTR_LEN(ini_entry->value);
+		esc_html = !sapi_module.phpinfo_as_text;
+	} else {
+		if (!sapi_module.phpinfo_as_text) {
+			display_string = "<i>no value</i>";
+			display_string_length = sizeof("<i>no value</i>") - 1;
 		} else {
-			PHPWRITE(display_string, display_string_length);
+			display_string = "no value";
+			display_string_length = sizeof("no value") - 1;
 		}
+	}
+
+	if (esc_html) {
+		php_html_puts(display_string, display_string_length);
+	} else {
+		PHPWRITE(display_string, display_string_length);
 	}
 }
 /* }}} */
